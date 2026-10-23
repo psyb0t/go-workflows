@@ -33,14 +33,12 @@ leaffanout ───► ┌─────┴──┐        ┌──┴──
 
 ## Run
 
-```shell
-$ go run .
-```
+Open the Docker-backed development shell with `make shell` from the repository root, then run `go run ./bench -h` inside it. Choose an isolated backend before running the benchmark. Its results depend on storage settings, concurrency and workload; they are not library performance guarantees.
 
 ### Help
 
 ```shell
-$ go run .h -h
+$ go run ./bench -h
   -activities int
         Number of activities to execute per leaf workflow (default 2)
   -backend string

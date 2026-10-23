@@ -19,7 +19,7 @@ func TestReleaseTag(t *testing.T) {
 		wantSuccess             bool
 	}{
 		{name: "root", tag: "v1.0.0", wantSuccess: true},
-		{name: "analyzer", tag: "analyzer/v1.2.3", wantSuccess: true},
+		{name: "removed analyzer tag", tag: "analyzer/v1.2.3"},
 		{name: "prerelease and metadata", tag: "v1.0.0-rc.0+build.01", wantSuccess: true},
 		{name: "zero major", tag: "v0.9.0", wantSuccess: true},
 		{name: "root malformed", tag: "vnext"},
@@ -31,7 +31,7 @@ func TestReleaseTag(t *testing.T) {
 		{name: "root incompatible module", tag: "v2.0.0"},
 		{name: "analyzer incompatible module", tag: "analyzer/v2.0.0"},
 		{name: "matching root major", tag: "v2.0.0", moduleSuffix: "/v2", wantSuccess: true},
-		{name: "matching analyzer major", tag: "analyzer/v2.0.0", moduleSuffix: "/v2", wantSuccess: true},
+		{name: "removed analyzer major", tag: "analyzer/v2.0.0", moduleSuffix: "/v2"},
 		{name: "old stable tag after migration", tag: "v1.0.0", moduleSuffix: "/v2"},
 		{name: "old unstable tag after migration", tag: "v0.9.0", moduleSuffix: "/v2"},
 		{name: "wrong migrated major", tag: "v3.0.0", moduleSuffix: "/v2"},

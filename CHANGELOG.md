@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.1.0
+
+- Add complete commented client/worker examples, explain the feature samples and check README examples against runnable source.
+- Correct the registration demo's activity arguments and allow the scaling worker's backend flag to be registered before parsing.
+- Register the queue demo's definitions once before polling and test its routed workflow and activity results.
+- Await persisted expiration in backend tests instead of assuming asynchronous cleanup finishes within one second.
+- Remove fixed Go and UI CPU quotas. Accept an optional local `DEV_CPUS` setting and leave CI runners uncapped.
+- Attach stdin and a terminal in `make shell` so the documented manual sample commands can run interactively.
+- Include independent worker coverage snapshots before deliberate crashes and merge child counters with the parent profile.
+- Return database state-query errors from MySQL and SQLite instead of reporting an active workflow. Test real storage failures, completion rollback, corrupt persisted data, replay mismatches, orchestrator lifecycle and diagnostic trees.
+- Reject MySQL and PostgreSQL activity heartbeats when no matching worker-owned activity exists.
+- Separate architecture, worker identities and routing, diagnostics, generation, development, testing and release documentation. Clarify diagnostics access control and backend connection ownership.
+- Move `MockBackend` and `NewMockBackend` into `backend/mocks`. Generate `backend.gen.go` with Mockery from colocated `gen.go` and `config.yml`; exclude generated files from coverage, not Git.
+- Generate the worker test's generic `MockTaskWorker` under `internal/worker/mocks` instead of maintaining it by hand.
+- Enforce a 90% minimum in `make test-coverage`, retain the detailed coverage profile and test coverage-gate boundaries. Exclude generated code, sample programs and benchmarks from the reported percentage while running all tests.
+- Add client tests for serialization, storage failures, terminal workflow results and automatic expiration updates.
+- Remove the separate workflow analyzer module and custom-linter setup. All Go code, tests and tools use the root module and vendor tree.
+- Add independent worker process tests for PostgreSQL and SQLite recovery, activity leases, replay, cancellation, signals, timers, retries and queue routing.
+- Run recovery scenarios through the normal race-enabled test and coverage commands, with a focused `make test-recovery` target.
+
+### Breaking tooling changes
+
+Tests must replace imports of `backend.MockBackend` and `backend.NewMockBackend` with `mocks.MockBackend` and `mocks.NewMockBackend` from `github.com/psyb0t/go-workflows/backend/mocks`.
+
+The separate analyzer module and custom-linter plugin are removed. Remove analyzer dependencies, plugin configuration and `MODULE_DIR=analyzer` from development commands. See [migration instructions](docs/releases.md#migrating-from-v100).
+
 ## v1.0.0
 
 - Adopt the `github.com/psyb0t/go-workflows` module path and matching analyzer module.

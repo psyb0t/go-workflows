@@ -13,6 +13,7 @@ import (
 	"github.com/psyb0t/go-workflows/internal/cleanup"
 
 	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -1052,7 +1053,7 @@ func (pb *postgresBackend) ExtendActivityTask(ctx context.Context, task *backend
 	defer cleanup.Rollback(ctx, tx)
 
 	until := time.Now().Add(pb.options.ActivityLockTimeout)
-	_, err = tx.ExecContext(
+	res, err := tx.ExecContext(
 		ctx,
 		`UPDATE activities SET locked_until = $1 WHERE activity_id = $2 AND worker = $3`,
 		until,
@@ -1061,6 +1062,13 @@ func (pb *postgresBackend) ExtendActivityTask(ctx context.Context, task *backend
 	)
 	if err != nil {
 		return ctxerrors.Wrap(err, "extending activity lock")
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return ctxerrors.Wrap(err, "checking extended activity lock")
+	}
+	if rows == 0 {
+		return ctxerrors.Wrap(commerr.ErrNotFound, "could not extend worker-owned activity")
 	}
 
 	if err := tx.Commit(); err != nil {

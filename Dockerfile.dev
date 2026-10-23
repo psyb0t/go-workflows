@@ -10,6 +10,7 @@ RUN apk add --no-cache \
     gcc=15.2.0-r5 \
     git=2.54.0-r0 \
     jq=1.8.2-r0 \
+    make=4.4.1-r4 \
     musl-dev=1.2.6-r3 \
     shellcheck=0.11.0-r1 \
     shfmt=3.13.1-r3

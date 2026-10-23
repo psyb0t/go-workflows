@@ -33,6 +33,8 @@ func Workflow1(ctx workflow.Context, start, times int, inputs Inputs) (int, erro
 			return 0, ctxerrors.Wrap(err, "error getting sub workflow result")
 		}
 
+		// A new execution starts with fresh history. Carry the next index and sum
+		// explicitly so replay does not repeat the completed iterations.
 		if i < 3 {
 			return r, workflow.ContinueAsNew(ctx, i+1, times, inputs)
 		}

@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/timer -backend memory.
+// Race a persisted two-second timer against a ten-second activity. The timer
+// normally wins; if the activity wins, its branch cancels the timer. The demo exits.
 package main
 
 import (
@@ -78,6 +81,8 @@ func Workflow1(ctx workflow.Context, msg string) (string, error) {
 
 	tctx, cancel := workflow.WithCancel(ctx)
 
+	// Select resumes the first ready branch. ScheduleTimer survives worker
+	// restarts with a persistent backend; time.Sleep inside a workflow would not.
 	workflow.Select(
 		ctx,
 		workflow.Await(workflow.ScheduleTimer(tctx, 2*time.Second), func(ctx workflow.Context, f workflow.Future[any]) {

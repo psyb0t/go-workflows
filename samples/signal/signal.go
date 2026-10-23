@@ -1,3 +1,7 @@
+// Run from make shell with: go run ./samples/signal -backend memory.
+// The client sends two named signals to the parent and one to its child.
+// Signal values are persisted even if the workflow has not received them yet.
+// After the child returns, the process waits for Ctrl+C.
 package main
 
 import (
@@ -46,6 +50,8 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 
 	log.Println("Started workflow", wf.InstanceID)
 
+	// Client-side sleeps only space out the demonstration. Workflow waits use
+	// replay-safe signal channels, not native Go channels or time.Sleep.
 	time.Sleep(2 * time.Second)
 	if err := c.SignalWorkflow(ctx, wf.InstanceID, "test", 42); err != nil {
 		panic(err)

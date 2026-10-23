@@ -1,20 +1,21 @@
 # Development
 
-The host needs Docker, Make and Git. `Dockerfile.dev` pins Go and scanner tooling; `Dockerfile.ui` pins Node and pnpm. Make runs as the host UID/GID. Go dependencies and tools are locked in `go.mod`, `go.sum` and `vendor` in both modules.
+The host needs Docker, Make and Git. `Dockerfile.dev` pins Go and scanner tooling; `Dockerfile.ui` pins Node and pnpm. Make runs as the host UID/GID. Go dependencies and tools share one `go.mod`, `go.sum` and `vendor` tree.
 
 ## Commands
 
 | Command | Result |
 | --- | --- |
 | `make run` | Execute the SQLite quick start |
+| `make run-greeting` | Run a client and worker with in-memory SQLite |
 | `make format` | Format first-party Go and shell source |
-| `make lint` | Lint both Go modules, shell, Dockerfiles and workflows |
-| `make build` | Typecheck/build the UI and compile both modules and samples |
+| `make lint` | Lint Go, shell, Dockerfiles and workflows |
+| `make build` | Typecheck/build the UI and compile the library and samples |
 | `make generate` | Run package-owned generators |
 | `make test` | Complete race-enabled unit and real-backend tests |
 | `make test-unit` | Unit tests without external database containers |
-| `make test-coverage` | Complete suite and per-module coverage gates |
-| `make test-analyzer` | Nested analyzer tests |
+| `make test-coverage` | Complete suite and coverage gate |
+| `make test-recovery` | Independent worker processes, forced crashes and persisted recovery |
 | `make test-mysql` | One real backend; equivalents exist for postgres, redis, sqlite and monoprocess |
 | `make sec` | Secret, filesystem and reachable Go vulnerability checks |
 | `make lint-fix` | Apply first-party formatter/linter fixes |
@@ -22,7 +23,11 @@ The host needs Docker, Make and Git. `Dockerfile.dev` pins Go and scanner toolin
 
 Integration targets mount the Docker socket and use host networking to reach dynamic loopback ports. Run them on a trusted development or CI host with a Unix Docker socket. Lint, build, generation and unit targets have no socket access. Missing Docker fails integration setup.
 
-Tests use `-race -count=1` and a bounded `TEST_TIMEOUT`. Coverage includes real backend scenarios. `MIN_TEST_COVERAGE` defaults to 62 and `MIN_ANALYZER_COVERAGE` to 90, based on measured inherited coverage. `coverage-percent.txt` contains the weighted aggregate used by CI badges.
+See [testing](testing.md) for suite selection, race instrumentation, real infrastructure, coverage gates and retained reports.
+
+## Local resource limits
+
+Go and UI containers have no CPU quota by default. To limit local runs, copy `.env.example` to `.env` and set `DEV_CPUS` to a positive Docker CPU quota such as `2.5`. An exported `DEV_CPUS` or a Make command-line assignment also works; command-line assignments override `.env`. With `CI=true`, Make ignores `.env` and CPU quotas, so GitHub Actions can use all CPUs available on its runner. Memory and PID limits remain unchanged.
 
 ## Dependencies
 
@@ -35,9 +40,9 @@ make pkg-upgrade
 make pkg-remove PKG=example.org/module
 ```
 
-Replace `example.org/module` with an actual module. `MODULE_DIR=analyzer` selects the nested module. External additions and upgrades must be at least seven days old. First-party `psyb0t` modules follow their upstream release line. Upgrade candidates are checked before changes are applied; direct dependencies and tool providers are both included. Lock synchronization tidies and vendors, then runs security checks.
+Replace `example.org/module` with an actual module. Dependency commands operate on the root module only. External additions and upgrades must be at least seven days old. First-party `psyb0t` modules follow their upstream release line. Upgrade candidates are checked before changes are applied; direct dependencies and tool providers are both included. Lock synchronization tidies and vendors, then runs security checks.
 
-Generated mocks belong to `backend/gen.go` and its colocated Mockery configuration. Edit the interface or configuration, then `make generate`. Do not hand-edit generated mocks or vendor source.
+See [generated mocks](generation.md) for the Mockery configurations, imports, regeneration workflow and CI drift guard.
 
 ## Diagnostics UI
 

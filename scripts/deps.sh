@@ -6,15 +6,11 @@ export GOFLAGS=-mod=mod
 readonly action=${1:?Usage: deps.sh lock|add|tool|update|upgrade|remove}
 repository_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 readonly repository_dir
-readonly module_dir=${MODULE_DIR:-.}
-case "$module_dir" in
-. | analyzer) ;;
-*)
-	log ERROR 'MODULE_DIR must be . or analyzer'
+if [[ "${MODULE_DIR:-.}" != . ]]; then
+	log ERROR 'dependency commands operate on the root module only'
 	exit 2
-	;;
-esac
-cd "$repository_dir/$module_dir"
+fi
+cd "$repository_dir"
 
 check_age() {
 	local candidate=$1 module=${1%@*} version=${1##*@} metadata released now
@@ -42,9 +38,6 @@ check_age() {
 lock_modules() {
 	go mod tidy
 	go mod vendor
-	if [[ "$module_dir" == . && -f analyzer/go.mod ]]; then
-		(cd analyzer && go mod tidy && go mod vendor)
-	fi
 }
 
 case "$action" in

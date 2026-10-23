@@ -18,6 +18,7 @@ import (
 	"github.com/psyb0t/go-workflows/backend"
 	"github.com/psyb0t/go-workflows/backend/converter"
 	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/mocks"
 	"github.com/psyb0t/go-workflows/core"
 	"github.com/psyb0t/go-workflows/internal/metrics"
 	"github.com/psyb0t/go-workflows/workflow"
@@ -30,7 +31,7 @@ func Test_Client_CreateWorkflowInstance_ParamMismatch(t *testing.T) {
 
 	ctx := context.Background()
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	c := &Client{
 		backend: b,
 		clock:   clock.New(),
@@ -48,7 +49,7 @@ func Test_Client_CreateWorkflowInstance_ParamMismatch(t *testing.T) {
 func Test_Client_CreateWorkflowInstance_NameGiven(t *testing.T) {
 	ctx := context.Background()
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
 	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("Metrics").Return(metrics.NewNoopMetricsClient())
@@ -80,7 +81,7 @@ func Test_Client_GetWorkflowResultTimeout(t *testing.T) {
 
 	ctx := context.Background()
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("GetWorkflowInstanceState", mock.Anything, instance).Return(core.WorkflowInstanceStateActive, nil)
 
@@ -104,7 +105,7 @@ func Test_Client_GetWorkflowResultSuccess(t *testing.T) {
 
 	r, _ := converter.DefaultConverter.To(42)
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("GetWorkflowInstanceState", mock.Anything, instance).Return(core.WorkflowInstanceStateActive, nil).Once().Run(func(args mock.Arguments) {
 		// After the first call, advance the clock to immediately go to the second call below
@@ -136,7 +137,7 @@ func Test_Client_SignalWorkflow(t *testing.T) {
 
 	ctx := context.Background()
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
 	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("SignalWorkflow", mock.Anything, instanceID, mock.MatchedBy(func(event *history.Event) bool {
@@ -164,7 +165,7 @@ func Test_Client_SignalWorkflow_WithArgs(t *testing.T) {
 
 	input, _ := converter.DefaultConverter.To(arg)
 
-	b := &backend.MockBackend{}
+	b := &mocks.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
 	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("SignalWorkflow", mock.Anything, instanceID, mock.MatchedBy(func(event *history.Event) bool {

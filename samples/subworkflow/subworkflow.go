@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/subworkflow -backend memory.
+// A parent awaits a separately persisted child that runs two activities.
+// Both workflow definitions must be registered. The process exits after completion.
 package main
 
 import (
@@ -84,6 +87,8 @@ func ParentWorkflow(ctx workflow.Context, msg string) error {
 	logger.Debug("Entering Workflow1")
 	logger.Debug("\tWorkflow instance input:", "msg", msg)
 
+	// A child has its own history and result. Get suspends this parent until the
+	// child completes; it does not block a workflow polling goroutine.
 	wr := workflow.CreateSubWorkflowInstance[string](ctx, workflow.DefaultSubWorkflowOptions, SubWorkflow, "some input")
 
 	result, err := wr.Get(ctx)

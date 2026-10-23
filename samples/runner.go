@@ -1,3 +1,7 @@
+// Package samples provides development-only backend wiring for the feature demos.
+// Use -backend memory for isolated single-process examples, or -backend sqlite
+// for processes sharing a local file. The default Redis recreation path flushes
+// ALL databases on localhost:6379. Never use it with shared or production storage.
 package samples
 
 import (
@@ -20,6 +24,9 @@ import (
 	"github.com/psyb0t/go-workflows/diag"
 )
 
+// GetBackend parses demo CLI flags and opens storage using fixed local settings.
+// It is not application configuration. In Redis mode it also starts diagnostics
+// on loopback port 3000; demos with their own diagnostics should use another backend.
 func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backend.Backend {
 	b := flag.String("backend", "redis", "backend to use: memory, sqlite, mysql, redis, postgres")
 	flag.Parse()

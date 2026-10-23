@@ -35,11 +35,15 @@ func (t *testHistoryProvider) GetWorkflowInstanceHistory(ctx context.Context, in
 	return t.history, nil
 }
 
-func newExecutor(r *registry.Registry, i *core.WorkflowInstance, historyProvider WorkflowHistoryProvider) (*executor, error) {
+func newExecutor(r *registry.Registry, i *core.WorkflowInstance, historyProvider WorkflowHistoryProvider, historyLimit ...int64) (*executor, error) {
 	logger := slog.Default()
 	tracer := noop.NewTracerProvider().Tracer("test")
+	limit := int64(10_000)
+	if len(historyLimit) > 0 {
+		limit = historyLimit[0]
+	}
 
-	e, err := NewExecutor(logger, tracer, r, converter.DefaultConverter, []wf.ContextPropagator{}, historyProvider, i, &metadata.WorkflowMetadata{}, clock.New(), 10_000)
+	e, err := NewExecutor(logger, tracer, r, converter.DefaultConverter, []wf.ContextPropagator{}, historyProvider, i, &metadata.WorkflowMetadata{}, clock.New(), limit)
 
 	return e.(*executor), err
 }

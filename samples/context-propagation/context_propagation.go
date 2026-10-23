@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/context-propagation -backend memory.
+// The propagator serializes selected context values into persisted task metadata.
+// Activities read the values restored by the worker; the process exits afterward.
 package main
 
 import (

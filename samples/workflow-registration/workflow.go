@@ -7,6 +7,7 @@ import (
 	"github.com/psyb0t/go-workflows/workflow"
 )
 
+// Workflow1 is looked up as WorkflowName because the worker overrides its name.
 func Workflow1(ctx workflow.Context, msg string) (int, error) {
 	logger := workflow.Logger(ctx)
 	logger.Debug("Entering Workflow1", "msg", msg)

@@ -6,7 +6,7 @@ A client persists a workflow-start event. A worker claims the task, replays reco
 
 The workflow function takes `workflow.Context` first and returns `error` or `(result, error)`. An activity returns the same shapes and may optionally take `context.Context` first. Register functions before starting a worker. Assign explicit names with `registry.WithName`; use the same names on producers and workers.
 
-Use `worker.New` to process workflows and activities together, or `NewWorkflowWorker` and `NewActivityWorker` in separate processes. Configure queues and concurrency through worker options. Cancel the context passed to `Start` and call `WaitForCompletion` before closing storage.
+See [architecture and workers](architecture.md) for process roles, registration, identity, queues, concurrency and shutdown.
 
 ## Determinism
 
@@ -29,6 +29,8 @@ Retries stop for cancellation or permanent failures. Configure maximum attempts 
 `client.SignalWorkflow` sends a serializable payload. A workflow receives it through `workflow.NewSignalChannel[T]`. Signals are stored before delivery; design payloads as versioned application contracts. See [signal](../samples/signal/) and [signal-subworkflow](../samples/signal-subworkflow/).
 
 `workflow.ScheduleTimer` records a durable wakeup and returns a future. `workflow.Sleep` is its convenience form. Timer cancellation is cooperative through workflow contexts. See [timer](../samples/timer/) and [cancellation](../samples/cancellation/).
+
+When waiting on a workflow channel, select between the channel and `ctx.Done()` if cancellation must interrupt the wait. A plain receive does not automatically observe cancellation.
 
 ## Scope and logging
 

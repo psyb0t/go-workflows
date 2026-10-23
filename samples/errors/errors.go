@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/errors -backend memory.
+// Activities and a child deliberately fail or panic. The parent inspects their
+// persisted error types without retrying, then stays available until Ctrl+C.
 package main
 
 import (
@@ -96,6 +99,7 @@ func Workflow1(ctx workflow.Context, msg string) error {
 	logger.Debug("Entering Workflow1", "msg", msg)
 	defer logger.Debug("Leaving Workflow1")
 
+	// One attempt makes each failure visible immediately instead of retrying it.
 	actOptions := workflow.DefaultActivityOptions
 	actOptions.RetryOptions = workflow.RetryOptions{
 		MaxAttempts: 1,

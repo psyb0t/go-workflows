@@ -13,6 +13,7 @@ import (
 	"github.com/psyb0t/go-workflows/internal/cleanup"
 
 	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -449,6 +450,7 @@ func (mb *mysqlBackend) GetWorkflowInstanceState(ctx context.Context, instance *
 		if err == sql.ErrNoRows {
 			return core.WorkflowInstanceStateActive, backend.ErrInstanceNotFound
 		}
+		return core.WorkflowInstanceStateActive, ctxerrors.Wrap(err, "scanning instance state")
 	}
 
 	return state, nil
@@ -1017,7 +1019,7 @@ func (mb *mysqlBackend) ExtendActivityTask(ctx context.Context, task *backend.Ac
 	defer cleanup.Rollback(ctx, tx)
 
 	until := time.Now().Add(mb.options.ActivityLockTimeout)
-	_, err = tx.ExecContext(
+	res, err := tx.ExecContext(
 		ctx,
 		`UPDATE activities SET locked_until = ? WHERE activity_id = ? AND worker = ?`,
 		until,
@@ -1026,6 +1028,13 @@ func (mb *mysqlBackend) ExtendActivityTask(ctx context.Context, task *backend.Ac
 	)
 	if err != nil {
 		return ctxerrors.Wrap(err, "extending activity lock")
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return ctxerrors.Wrap(err, "checking extended activity lock")
+	}
+	if rows == 0 {
+		return ctxerrors.Wrap(commerr.ErrNotFound, "could not extend worker-owned activity")
 	}
 
 	if err := tx.Commit(); err != nil {

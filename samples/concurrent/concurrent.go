@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/concurrent -backend memory.
+// Two workflow branches schedule independent activities and join before returning.
+// Activity2 delays five seconds; press Ctrl+C after both branch results appear.
 package main
 
 import (
@@ -73,6 +76,8 @@ func Workflow1(ctx workflow.Context, msg string) (string, error) {
 		logger.Debug("Leaving Workflow1")
 	}()
 
+	// Workflow primitives preserve scheduling order during replay. Native go and
+	// sync.WaitGroup belong outside workflow functions, including in activities.
 	wg := workflow.NewWaitGroup()
 	wg.Add(2)
 

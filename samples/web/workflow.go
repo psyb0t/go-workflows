@@ -18,6 +18,8 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 	logger.Debug("Entering Workflow1", "msg", msg, "times", times, "inputs", inputs)
 	defer logger.Debug("Leaving Workflow1")
 
+	// Nested child workflows create a tree visible in diagnostics. Use workflow
+	// concurrency primitives so its scheduling can be replayed from history.
 	wg := workflow.NewWaitGroup()
 
 	for i := 0; i < times; i++ {

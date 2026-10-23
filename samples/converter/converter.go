@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/converter -backend memory.
+// A gob converter replaces JSON for persisted inputs and results. The workflow
+// returns 59, shuts down its worker, then waits for Ctrl+C.
 package main
 
 import (
@@ -21,6 +24,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// CustomConverter must be configured identically on every client and worker
+// reading this backend, including after a restart with existing history.
 type CustomConverter struct{}
 
 var _ converter.Converter = (*CustomConverter)(nil)

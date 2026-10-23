@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/queues -backend memory.
+// Separate pollers consume the default, custom activity and custom workflow
+// queues on one backend. Diagnostics use loopback port 3000. Stop with Ctrl+C.
 package main
 
 import (
@@ -44,8 +47,56 @@ func main() {
 		}
 	}()
 
-	// Run worker
-	w := RunDefaultWorker(ctx, b)
+	w, activityWorker, workflowWorker := startWorkers(ctx, b)
+
+	// Start workflow via client
+	c := client.New(b)
+
+	runWorkflow(ctx, c)
+
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
+	<-sigint
+
+	cancel()
+
+	if err := w.WaitForCompletion(); err != nil {
+		panic("could not stop worker" + err.Error())
+	}
+
+	if err := activityWorker.WaitForCompletion(); err != nil {
+		panic("could not stop activity worker" + err.Error())
+	}
+	if err := workflowWorker.WaitForCompletion(); err != nil {
+		panic("could not stop workflow worker" + err.Error())
+	}
+}
+
+func runWorkflow(ctx context.Context, c *client.Client) {
+	wf, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: uuid.NewString(),
+	}, Workflow1, "Hello world"+uuid.NewString(), 42, Inputs{
+		Msg:   "",
+		Times: 0,
+	})
+	if err != nil {
+		log.Fatal(err)
+		panic("could not start workflow")
+	}
+
+	result, err := client.GetWorkflowResult[int](ctx, c, wf, time.Second*10)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Workflow finished. Result:", result)
+}
+
+// startWorkers uses one backend with distinct queue subscriptions. Each worker
+// registers its definitions before polling so tasks can resolve their names.
+func startWorkers(ctx context.Context, b backend.Backend) (*worker.Worker, *worker.Worker, *worker.Worker) {
+	// Register every definition once before starting background polling.
+	w := worker.New(b, nil)
 
 	if err := w.RegisterWorkflow(Workflow1); err != nil {
 		panic(err)
@@ -98,60 +149,5 @@ func main() {
 		panic("could not start worker")
 	}
 
-	// Start workflow via client
-	c := client.New(b)
-
-	runWorkflow(ctx, c)
-
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-	<-sigint
-
-	cancel()
-
-	if err := w.WaitForCompletion(); err != nil {
-		panic("could not stop worker" + err.Error())
-	}
-
-	if err := activityWorker.WaitForCompletion(); err != nil {
-		panic("could not stop activity worker" + err.Error())
-	}
-}
-
-func runWorkflow(ctx context.Context, c *client.Client) {
-	wf, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
-		InstanceID: uuid.NewString(),
-	}, Workflow1, "Hello world"+uuid.NewString(), 42, Inputs{
-		Msg:   "",
-		Times: 0,
-	})
-	if err != nil {
-		log.Fatal(err)
-		panic("could not start workflow")
-	}
-
-	result, err := client.GetWorkflowResult[int](ctx, c, wf, time.Second*10)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("Workflow finished. Result:", result)
-}
-
-func RunDefaultWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
-	w := worker.New(mb, nil)
-
-	if err := w.RegisterWorkflow(Workflow1); err != nil {
-		panic(err)
-	}
-
-	if err := w.RegisterActivity(Activity1); err != nil {
-		panic(err)
-	}
-
-	if err := w.Start(ctx); err != nil {
-		panic("could not start worker")
-	}
-
-	return w
+	return w, activityWorker, workflowWorker
 }

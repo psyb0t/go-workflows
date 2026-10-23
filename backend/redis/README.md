@@ -1,12 +1,22 @@
 # Redis backend
 
+Redis stores execution state and histories and coordinates workflow/activity consumers through streams and Lua scripts. See [backend operations](../../docs/backends.md) for deployment and durability requirements.
+
+## Client ownership and retention
+
+`NewRedisBackend` accepts an application-configured `redis.UniversalClient`. Configure authentication, TLS and connection policy in that client. The backend's `Close` closes the supplied Redis client; do not share it with an application component that must outlive the backend.
+
+`WithKeyPrefix` separates key namespaces, not authorization. Use separate credentials or Redis deployments when access must be isolated. `WithBlockTimeout` controls blocking queue reads.
+
+Finished executions do not expire by default. Configure `WithAutoExpiration` for finished runs and `WithAutoExpirationContinueAsNew` for continued executions. The client-managed SQL expiration workflow is not supported by Redis; `Feature_Expiration` reports false. Redis persistence and replication settings determine whether stored state survives server failure.
+
 ## Instances and their state
 
-Instances and their state (started_at, completed_at etc.) are stored as JSON blobs under the `instances-{instanceID}` keys.
+Execution state uses `instance:{instanceID}:{executionID}` keys, preceded by the configured key prefix. Additional indexes track active instances, creation order and expiration. `keys.go` owns the exact names; do not construct or mutate them in application code.
 
 ## History and pending events
 
-Events are stored in streams per workflow instance under the `events-{instanceID}` key. We maintain a cursor in the instance state, that indicates the last event that has been executed. Every event after that in the stream, is a pending event and will be returned to the worker in the next workflow task.
+Recorded history and pending events use separate per-execution streams, keyed by `history:{instanceID}:{executionID}` and `pending-events:{instanceID}:{executionID}`, with the configured prefix. The worker replays recorded events and consumes pending events when processing the next workflow task.
 
 ## Timer events
 
@@ -25,7 +35,7 @@ Task queues are implemented using Redis STREAMs. In addition for queues where we
 
   Store keys for queue items in a `ZSET`. The score for the sorted set is the timestamp when the task is unlocked. For new tasks the `SCORE` is the current timestamp.
 
-  Workers make a `ZRANGE` query to that sorted set, looking for tasks where the `SCORE` is in `-inf, now)`. That will get tasksß where the unlock timestamp is in the past. Either because they have just been queued, or the lock has expired.
+  Workers make a `ZRANGE` query to that sorted set, looking for tasks where the `SCORE` is in `-inf, now)`. That finds tasks whose unlock timestamp is in the past, either because they were just queued or because the lock expired.
 
   Once a worker picks up a task, the score is updated to `now + lock_timeout`. Query and update are done in a transaction with a `WATCH` on the queue key.
 

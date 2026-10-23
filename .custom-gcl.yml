@@ -1,5 +1,0 @@
-version: v2.8.0
-destination: .
-plugins:
-- module: 'github.com/psyb0t/go-workflows/analyzer'
-  path: ./analyzer

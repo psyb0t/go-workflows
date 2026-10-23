@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/signal-subworkflow -backend memory.
+// The parent starts a named child, sends its signal through workflow history,
+// and awaits the child's result "World". Stop the demo with Ctrl+C.
 package main
 
 import (
@@ -72,6 +75,8 @@ func Workflow1(ctx workflow.Context, msg string, subID string) (string, error) {
 		InstanceID: subID,
 	}, SubWorkflow1)
 
+	// Use workflow.SignalWorkflow inside workflows so replay records the send.
+	// External callers use client.SignalWorkflow instead.
 	if _, err := workflow.SignalWorkflow(ctx, subID, "sub-signal", 42).Get(ctx); err != nil {
 		return "", ctxerrors.Wrap(err, "could not signal sub-workflow")
 	}

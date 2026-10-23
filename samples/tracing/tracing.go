@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/tracing -backend memory.
+// Spans print to stdout and export to a local OTLP/HTTP collector on port 4318.
+// The client sends a signal, awaits result 47, drains workers and flushes traces.
 package main
 
 import (
@@ -38,8 +41,6 @@ func main() {
 	)
 
 	oclient := otlptracehttp.NewClient(
-		// otlptracehttp.WithEndpoint("localhost:8360"),
-		// otlptracehttp.WithURLPath("/traces/otlp/v0.9"),
 		otlptracehttp.WithEndpoint("localhost:4318"),
 		otlptracehttp.WithInsecure(),
 	)
@@ -110,7 +111,8 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 	log.Println("Workflow finished. Result:", result)
 }
 
-// Ensure we aren't caching for this sample
+// Disable executor caching so this demonstration exposes replay paths in traces.
+// The zero sticky timeout above also allows immediate reassignment between workers.
 type noopWorkflowExecutorCache struct{}
 
 var _ executor.Cache = (*noopWorkflowExecutorCache)(nil)

@@ -1,3 +1,7 @@
+// Producer process. Start the matching worker, then run from a second make shell:
+// go run ./samples/simple-split-worker/starter -backend sqlite
+// Both processes must open the same simple-split.sqlite file. This producer exits
+// after enqueueing; the worker continues processing without a producer connection.
 package main
 
 import (
@@ -16,7 +20,7 @@ func main() {
 
 	b := samples.GetBackend("simple-split", false)
 
-	// Start workflow via client
+	// The client writes tasks to the shared backend; it does not dial the worker.
 	c := client.New(b)
 	startWorkflow(ctx, c)
 }

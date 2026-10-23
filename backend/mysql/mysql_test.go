@@ -128,7 +128,7 @@ func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 	// There is no index on `visible_at`, but this is okay for test only usage.
 	futureEvents, err := tx.QueryContext(
 		ctx,
-		"SELECT pe.id, pe.sequence_id, pe.instance_id, pe.execution_id, pe.event_type, pe.timestamp, pe.schedule_event_id, pe.visible_at, a.data FROM `pending_events` pe JOIN `attributes` a ON a.id = pe.id AND a.instance_id = pe.instance_id AND a.execution_id = pe.execution_id WHERE pe.visible_at IS NOT NULL",
+		"SELECT pe.event_id, pe.sequence_id, pe.instance_id, pe.execution_id, pe.event_type, pe.timestamp, pe.schedule_event_id, pe.visible_at, a.data FROM `pending_events` pe JOIN `attributes` a ON a.event_id = pe.event_id AND a.instance_id = pe.instance_id AND a.execution_id = pe.execution_id WHERE pe.visible_at IS NOT NULL",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("getting history: %w", err)
@@ -139,7 +139,7 @@ func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 	f := make([]*history.Event, 0)
 
 	for futureEvents.Next() {
-		var instanceID string
+		var instanceID, executionID string
 		var attributes []byte
 
 		fe := &history.Event{}
@@ -148,11 +148,12 @@ func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 			&fe.ID,
 			&fe.SequenceID,
 			&instanceID,
+			&executionID,
 			&fe.Type,
 			&fe.Timestamp,
 			&fe.ScheduleEventID,
-			&attributes,
 			&fe.VisibleAt,
+			&attributes,
 		); err != nil {
 			return nil, fmt.Errorf("scanning event: %w", err)
 		}

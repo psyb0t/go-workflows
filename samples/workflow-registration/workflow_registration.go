@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/workflow-registration -backend memory.
+// Explicit names let clients submit workflows without importing their function
+// implementations. The name must match registration exactly. The result is 47.
 package main
 
 import (
@@ -54,6 +57,7 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
+	// Persisted names are part of the compatibility contract for existing histories.
 	if err := w.RegisterWorkflow(Workflow1, registry.WithName("WorkflowName")); err != nil {
 		panic(err)
 	}

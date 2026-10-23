@@ -30,12 +30,8 @@ Finished histories remain until removed or expired. The client exposes automatic
 
 ## Diagnostics
 
-`diag.NewServeMux(backend)` serves the embedded web UI and read-only API. The caller owns the HTTP server, bind address, timeouts and authentication. Bind loopback for local inspection or use an authenticated reverse proxy. Inputs, results and errors can contain sensitive data.
-
-![Workflow diagnostics](images/diag-list.png)
-
-Configure tracing and metrics through `backend.WithTracerProvider` and `backend.WithMetrics`. Both default to no-op implementations. Metrics adapters implement `backend/metrics.Client`.
+See [diagnostics](diagnostics.md) for the embedded UI, HTTP API, access control, metrics and tracing.
 
 ## Integration services
 
-Tests create isolated, digest-pinned MySQL, PostgreSQL and Redis containers, wait for actual database queries or PING, allocate dynamic loopback ports and clean up their own resources. Production constructors and migrations run against those services. Tests do not need a shared Compose stack.
+See [testing](testing.md) for isolated real-backend contracts and process recovery. Tests do not need a shared Compose stack.

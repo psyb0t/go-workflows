@@ -1,3 +1,5 @@
+// Package simple_split_worker contains definitions shared by the producer and
+// consumer binaries. The producer names Workflow1; the consumer registers and runs it.
 package simple_split_worker
 
 import (

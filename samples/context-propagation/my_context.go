@@ -34,11 +34,13 @@ func myValuesWf(ctx workflow.Context) *myData {
 	return ctx.Value(k).(*myData)
 }
 
+// myPropagator copies only explicitly selected data, not arbitrary context values.
+// Configure it on every producer and consumer of this backend. Never include secrets.
 type myPropagator struct{}
 
 var _ workflow.ContextPropagator = &myPropagator{}
 
-// Extract implements workflow.ContextPropagator
+// Extract restores metadata into the ordinary Go context used by an activity.
 func (*myPropagator) Extract(ctx context.Context, metadata *workflow.Metadata) (context.Context, error) {
 	ms := metadata.Get("mydata")
 
@@ -50,7 +52,7 @@ func (*myPropagator) Extract(ctx context.Context, metadata *workflow.Metadata) (
 	return withMyValues(ctx, d), nil
 }
 
-// ExtractToWorkflow implements workflow.ContextPropagator
+// ExtractToWorkflow restores the same values into the replay-safe workflow context.
 func (*myPropagator) ExtractToWorkflow(ctx workflow.Context, metadata *workflow.Metadata) (workflow.Context, error) {
 	ms := metadata.Get("mydata")
 
@@ -62,7 +64,7 @@ func (*myPropagator) ExtractToWorkflow(ctx workflow.Context, metadata *workflow.
 	return withMyValuesWf(ctx, d), nil
 }
 
-// Inject implements workflow.ContextPropagator
+// Inject records client or activity context values before a task crosses storage.
 func (*myPropagator) Inject(ctx context.Context, metadata *workflow.Metadata) error {
 	d := myValues(ctx)
 	b, err := json.Marshal(d)
@@ -75,7 +77,7 @@ func (*myPropagator) Inject(ctx context.Context, metadata *workflow.Metadata) er
 	return nil
 }
 
-// InjectFromWorkflow implements workflow.ContextPropagator
+// InjectFromWorkflow carries changed workflow values into subsequently scheduled tasks.
 func (*myPropagator) InjectFromWorkflow(ctx workflow.Context, metadata *workflow.Metadata) error {
 	d := myValuesWf(ctx)
 	b, err := json.Marshal(d)

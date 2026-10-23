@@ -1,3 +1,7 @@
+// Run from make shell with: go run ./samples/web -backend memory.
+// The diagnostics mux listens on 127.0.0.1:3000/diag/ and reads the worker's
+// backend. It is not a task server. Activities intentionally take 50 seconds,
+// longer than the client's ten-second wait, so this demo reports a timeout.
 package main
 
 import (

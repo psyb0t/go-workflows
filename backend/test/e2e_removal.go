@@ -6,12 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/psyb0t/go-workflows/backend"
 	"github.com/psyb0t/go-workflows/client"
 	"github.com/psyb0t/go-workflows/worker"
 	"github.com/psyb0t/go-workflows/workflow"
+)
+
+const (
+	autoExpirationWaitTimeout  = 10 * time.Second
+	autoExpirationPollInterval = 20 * time.Millisecond
 )
 
 var e2eRemovalTests = []backendTest{
@@ -69,16 +75,12 @@ var e2eRemovalTests = []backendTest{
 			_, err = client.GetWorkflowResult[bool](ctx, c, workflowA, time.Second*10)
 			require.NoError(t, err)
 
-			for i := 0; i < 10; i++ {
-				time.Sleep(100 * time.Millisecond)
-				_, err = c.GetWorkflowInstanceState(ctx, workflowA)
-				if !errors.Is(err, backend.ErrInstanceNotFound) {
-					continue
-				}
-				break
-			}
-
-			require.ErrorIs(t, err, backend.ErrInstanceNotFound)
+			// Expiration crosses workflow, timer and activity pollers. Await the
+			// persisted deletion instead of assuming they finish within one second.
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				_, err := c.GetWorkflowInstanceState(ctx, workflowA)
+				assert.ErrorIs(collect, err, backend.ErrInstanceNotFound)
+			}, autoExpirationWaitTimeout, autoExpirationPollInterval)
 		},
 	},
 	{
@@ -104,22 +106,16 @@ var e2eRemovalTests = []backendTest{
 
 			time.Sleep(1000 * time.Millisecond)
 			_, err = c.GetWorkflowInstanceState(ctx, workflowA)
-			require.NotErrorIs(t, err, backend.ErrInstanceNotFound)
+			require.NoError(t, err)
 
 			// update delay
 			err = c.StartAutoExpiration(ctx, time.Millisecond)
 			require.NoError(t, err)
 
-			for i := 0; i < 10; i++ {
-				time.Sleep(100 * time.Millisecond)
-				_, err = c.GetWorkflowInstanceState(ctx, workflowA)
-				if !errors.Is(err, backend.ErrInstanceNotFound) {
-					continue
-				}
-				break
-			}
-
-			require.ErrorIs(t, err, backend.ErrInstanceNotFound)
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				_, err := c.GetWorkflowInstanceState(ctx, workflowA)
+				assert.ErrorIs(collect, err, backend.ErrInstanceNotFound)
+			}, autoExpirationWaitTimeout, autoExpirationPollInterval)
 		},
 	},
 }

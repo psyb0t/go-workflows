@@ -21,6 +21,8 @@ func Workflow1(ctx workflow.Context) (string, error) {
 	}
 	logger.Debug("R1 result", "r1", r1)
 
+	// Only subsequently scheduled tasks see these new values. The first activity's
+	// result and metadata remain in history unchanged for replay.
 	ctx = withMyValuesWf(ctx, &myData{
 		Name:  "world",
 		Count: data.Count + 1,

@@ -1,0 +1,12 @@
+all: false
+dir: .
+filename: task_worker.gen.go
+structname: MockTaskWorker
+pkgname: mocks
+template: testify
+force-file-write: true
+formatter: goimports
+packages:
+  github.com/psyb0t/go-workflows/internal/worker:
+    interfaces:
+      TaskWorker:

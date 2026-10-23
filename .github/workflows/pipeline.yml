@@ -3,7 +3,7 @@ name: pipeline
 on:
   push:
     branches: [main]
-    tags: ['v*', 'analyzer/v*']
+    tags: ['v*']
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]

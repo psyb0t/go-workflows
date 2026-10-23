@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/continue-as-new -backend memory.
+// The workflow carries its sum into successive executions and returns 168.
+// Diagnostics listen on loopback port 3000; press Ctrl+C to stop the worker.
 package main
 
 import (

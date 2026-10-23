@@ -12,6 +12,8 @@ type Inputs struct {
 	Times int
 }
 
+// Workflow1 runs activities sequentially: the second is scheduled only after
+// the first result is recorded. Exported Inputs fields can be serialized.
 func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int, error) {
 	logger := workflow.Logger(ctx)
 	logger.Debug("Entering Workflow1", "msg", msg, "times", times, "inputs", inputs)
@@ -37,8 +39,6 @@ func Activity1(ctx context.Context, a, b int) (int, error) {
 	logger.Debug("Entering Activity1")
 	defer logger.Debug("Leaving Activity1")
 
-	// time.Sleep(5 * time.Second)
-
 	return a + b, nil
 }
 
@@ -46,8 +46,6 @@ func Activity2(ctx context.Context) (int, error) {
 	logger := activity.Logger(ctx)
 	logger.Debug("Entering Activity2")
 	defer logger.Debug("Leaving Activity2")
-
-	// time.Sleep(1 * time.Second)
 
 	return 12, nil
 }

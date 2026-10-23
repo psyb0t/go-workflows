@@ -4,16 +4,11 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 readonly release_tag=${RELEASE_TAG:-${GITHUB_REF_NAME:-}}
-module_file=go.mod
 version=$release_tag
 case "$release_tag" in
-analyzer/v*)
-	module_file=analyzer/go.mod
-	version=${release_tag#analyzer/}
-	;;
 v*) ;;
 *)
-	log ERROR 'release tag must select the root or analyzer module'
+	log ERROR 'release tag must start with v'
 	exit 2
 	;;
 esac
@@ -36,7 +31,7 @@ if [[ "$base" == *-* ]]; then
 fi
 
 repository_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-module_path=$(awk '$1 == "module" {print $2}' "$repository_dir/$module_file")
+module_path=$(awk '$1 == "module" {print $2}' "$repository_dir/go.mod")
 required_suffix=
 if [[ "$major" != 0 && "$major" != 1 ]]; then
 	required_suffix=/v$major

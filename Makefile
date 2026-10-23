@@ -1,9 +1,14 @@
 APP_NAME := go-workflows
 PROJECT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+# Local resource preferences never restrict CI runners.
+ifneq ($(CI),true)
+-include $(PROJECT_DIR)/.env
+CPU_FLAGS := $(if $(strip $(DEV_CPUS)),--cpus "$(DEV_CPUS)")
+endif
 DEV_IMAGE ?= $(APP_NAME)-dev
 UI_IMAGE ?= $(APP_NAME)-ui-dev
 UI_RUN := docker run --rm --init --user $(shell id -u):$(shell id -g) --cap-drop ALL \
-	--security-opt no-new-privileges:true --memory 2g --cpus 2 --pids-limit 256 \
+	--security-opt no-new-privileges:true --memory 2g $(CPU_FLAGS) --pids-limit 256 \
 	-v $(PROJECT_DIR):/work -w /work/diag/app $(UI_IMAGE)
 RUN_UID := $(shell id -u)
 RUN_GID := $(shell id -g)
@@ -12,23 +17,20 @@ DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock 2>/dev/null)
 PKG ?= ./...
 GOFLAGS ?= -mod=vendor
 export PKG GOFLAGS RELEASE_TAG
-MODULE_DIR ?= .
-export MODULE_DIR
 TEST_TIMEOUT ?= 10m
 TEST_COUNT ?= 1
-MIN_TEST_COVERAGE ?= 62
-MIN_ANALYZER_COVERAGE ?= 90
-export TEST_TIMEOUT TEST_COUNT MIN_TEST_COVERAGE MIN_ANALYZER_COVERAGE
+MIN_TEST_COVERAGE ?= 90
+export TEST_TIMEOUT TEST_COUNT MIN_TEST_COVERAGE
 
 DEV_ENV := --user $(RUN_UID):$(RUN_GID) --cap-drop ALL \
-	--security-opt no-new-privileges:true --memory 8g --cpus 8 --pids-limit 512 \
+	--security-opt no-new-privileges:true --memory 8g $(CPU_FLAGS) --pids-limit 512 \
 	-e HOME=/tmp -e CGO_ENABLED=1 -e GOTOOLCHAIN=local \
 	-e GOPATH=/tmp/go -e GOCACHE=/tmp/go-cache -e PKG -e GOFLAGS \
-	-e MIN_TEST_COVERAGE -e MIN_ANALYZER_COVERAGE -e TEST_TIMEOUT -e TEST_COUNT -e MODULE_DIR \
+	-e MIN_TEST_COVERAGE -e TEST_TIMEOUT -e TEST_COUNT \
 	-e RELEASE_TAG -e GITHUB_REF_NAME
 DEV_CACHE := -v $(PROJECT_DIR)/.cache/go:/tmp/go -v $(PROJECT_DIR)/.cache/build:/tmp/go-cache \
 	-v $(PROJECT_DIR)/.cache/trivy:/tmp/trivy-cache -e TRIVY_CACHE_DIR=/tmp/trivy-cache
-DEV_RUN := docker run --rm --init $(DEV_ENV) $(DEV_CACHE) \
+DEV_RUN = docker run --rm --init $(DEV_TERMINAL_FLAGS) $(DEV_ENV) $(DEV_CACHE) \
 	-v $(PROJECT_DIR):/work -w /work $(DEV_IMAGE)
 DEV_RUN_DIND := docker run --rm --init $(DEV_ENV) $(DEV_CACHE) \
 	--group-add $(DOCKER_GID) \
@@ -38,7 +40,7 @@ DEV_RUN_DIND := docker run --rm --init $(DEV_ENV) $(DEV_CACHE) \
 
 .PHONY: help all dev-image shell dep pkg-lock pkg-add pkg-add-tool pkg-update pkg-upgrade pkg-remove \
 	format fmt lint lint-fix build generate ui-image ui-lock build-ui test test-unit test-integration test-coverage \
-	test-analyzer test-redis test-mysql test-postgres test-sqlite test-monoprocess test-backends sec audit run analyzer-plugin clean check-release-tag
+	test-recovery test-redis test-mysql test-postgres test-sqlite test-monoprocess test-backends sec audit run run-greeting clean check-release-tag
 
 help: ## List supported project commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_ -]+:.*## / {n=split($$1, names, " "); for (i=1; i<=n; i++) printf "%-24s %s\n", names[i], $$2}' $(MAKEFILE_LIST)
@@ -52,12 +54,13 @@ dev-image: ## Build the pinned development toolchain
 	@mkdir -p .cache/go .cache/build .cache/trivy
 	docker build -f Dockerfile.dev -t $(DEV_IMAGE) $(PROJECT_DIR)
 
+shell: DEV_TERMINAL_FLAGS := --interactive --tty
 shell: dev-image ## Open a development shell without Docker socket access
 	$(DEV_RUN) bash
 
 dep: pkg-lock ## Synchronize module checksums and vendored dependencies
 
-pkg-lock: dev-image ## Tidy and vendor existing pins, optionally MODULE_DIR=analyzer
+pkg-lock: dev-image ## Tidy and vendor existing dependency pins
 	$(DEV_RUN) bash scripts/deps.sh lock
 
 pkg-add: dev-image ## Add a pinned dependency, PKG=module@version
@@ -75,18 +78,18 @@ pkg-upgrade: dev-image ## Resolve and age-check every direct dependency before u
 pkg-remove: dev-image ## Remove a dependency, PKG=module
 	$(DEV_RUN) bash scripts/deps.sh remove
 
-format: dev-image ## Format first-party Go code in both modules
+format: dev-image ## Format first-party Go code
 	$(DEV_RUN) bash scripts/checks.sh format
 
 fmt: format ## Alias for format
 
-lint: dev-image ## Lint both modules with locked Go tools
+lint: dev-image ## Lint the module with locked Go tools
 	$(DEV_RUN) bash scripts/checks.sh lint
 
 lint-fix: dev-image ## Apply formatter and linter fixes to first-party source
 	$(DEV_RUN) bash scripts/checks.sh lint-fix
 
-build: dev-image build-ui ## Compile the diagnostics UI, library, examples and analyzer
+build: dev-image build-ui ## Compile the diagnostics UI, library and examples
 	$(DEV_RUN) bash scripts/checks.sh build
 
 ui-image: ## Build the pinned diagnostics UI toolchain
@@ -110,13 +113,10 @@ test-unit: dev-image ## Run race-enabled unit tests without external backend ser
 
 test-integration: test ## Run the complete integration suite without silent skips
 
-test-analyzer: dev-image ## Test the nested analyzer module with the race detector
-	$(DEV_RUN) bash scripts/checks.sh analyzer
+test-recovery: dev-image ## Test independent worker processes and crash recovery with the race detector
+	$(DEV_RUN_DIND) go test -race -count=$(TEST_COUNT) -timeout=$(TEST_TIMEOUT) ./tests/integration
 
-analyzer-plugin: dev-image ## Build the custom golangci-lint binary with the workflow analyzer
-	$(DEV_RUN) bash -c 'binary=$$(go tool -n golangci-lint); GOFLAGS=-mod=mod "$$binary" custom'
-
-test-coverage: dev-image ## Measure unit and real-backend coverage and enforce the threshold
+test-coverage: dev-image ## Run race-enabled unit and real-backend tests with a 90% coverage minimum
 	$(DEV_RUN_DIND) bash scripts/test-coverage.sh
 
 test-redis test-mysql test-postgres test-sqlite test-monoprocess: dev-image ## Test one real backend
@@ -132,6 +132,9 @@ audit: sec ## Alias for source and dependency security checks
 run: dev-image ## Run the persistent SQLite quick start and print result 42
 	$(DEV_RUN) go run ./samples/quickstart
 
+run-greeting: dev-image ## Run the in-memory client and worker introduction
+	$(DEV_RUN) go run ./samples/greeting
+
 clean: ## Remove only generated coverage and scanner reports
-	@$(RM) coverage.txt coverage-analyzer.txt coverage-percent.txt sec.sarif
+	@$(RM) coverage.txt coverage.out coverage-percent.txt sec.sarif
 

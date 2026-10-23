@@ -23,7 +23,7 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 	}
 	logger.Info("R1 result", "r1", r1)
 
-	// Queue activity to separate queue
+	// Only activity workers polling CustomActivityQueue can claim this task.
 	r2, err := workflow.ExecuteActivity[int](ctx, workflow.ActivityOptions{
 		Queue: CustomActivityQueue,
 	}, Activity2).Get(ctx)
@@ -32,7 +32,7 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 	}
 	logger.Info("R2 result", "r2", r2)
 
-	// Queue sub workflow to separate queue
+	// Routing a child workflow does not move its parent off the default queue.
 	if _, err := workflow.CreateSubWorkflowInstance[any](ctx, workflow.SubWorkflowOptions{
 		Queue: CustomWorkflowQueue,
 	}, SubWorkflow).Get(ctx); err != nil {
@@ -47,7 +47,7 @@ func SubWorkflow(ctx workflow.Context) error {
 	logger.Info("Entering SubWorkflow")
 	defer logger.Info("Leaving SubWorkflow")
 
-	// Queue activity to separate queue
+	// A workflow queue and an activity queue are independent routing choices.
 	r2, err := workflow.ExecuteActivity[int](ctx, workflow.ActivityOptions{
 		Queue: CustomActivityQueue,
 	}, Activity2).Get(ctx)
@@ -64,8 +64,6 @@ func Activity1(ctx context.Context, a, b int) (int, error) {
 	logger.Info("Entering Activity1")
 	defer logger.Info("Leaving Activity1")
 
-	// time.Sleep(5 * time.Second)
-
 	return a + b, nil
 }
 
@@ -73,8 +71,6 @@ func Activity2(ctx context.Context) (int, error) {
 	logger := activity.Logger(ctx)
 	logger.Info("Entering Activity2")
 	defer logger.Info("Leaving Activity2")
-
-	// time.Sleep(1 * time.Second)
 
 	return 12, nil
 }

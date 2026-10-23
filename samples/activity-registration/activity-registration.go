@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/activity-registration -backend memory.
+// The worker injects a shared receiver into activities; the workflow only stores
+// activity names and arguments. This demo stays alive until Ctrl+C.
 package main
 
 import (
@@ -69,16 +72,18 @@ func Workflow1(ctx workflow.Context, msg string) error {
 	logger.Debug("Entering Workflow1")
 	defer logger.Debug("Leaving Workflow1")
 
+	// The nil receiver supplies method names, not state. The registered receiver
+	// above is the one used when a worker actually executes these activities.
 	var a *activities
 
-	if r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, a.Activity1, 35, 12, nil, "test").Get(ctx); err != nil {
-		return ctxerrors.New("error getting activity 1 result")
+	if r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, a.Activity1, 35, 12).Get(ctx); err != nil {
+		return ctxerrors.Wrap(err, "get activity 1 result")
 	} else {
 		logger.Debug("R1 result:", "r1", r1)
 	}
 
 	if r2, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, a.Activity2).Get(ctx); err != nil {
-		return ctxerrors.New("error getting activity 2 result")
+		return ctxerrors.Wrap(err, "get activity 2 result")
 	} else {
 		logger.Debug("R2 result:", "r2", r2)
 	}

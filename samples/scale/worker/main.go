@@ -1,8 +1,11 @@
+// Consumer for the scaling demonstration. From make shell, run:
+// go run ./samples/scale/worker -backend sqlite
+// Replicas must share the producer's backend and queues. Storage leases assign
+// tasks to workers; parallel-task settings bound concurrency per worker, not globally.
 package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -14,8 +17,6 @@ import (
 )
 
 func main() {
-	flag.Parse()
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	b := samples.GetBackend("scale", false)

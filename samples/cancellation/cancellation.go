@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/cancellation -backend memory.
+// The client requests cancellation after two seconds; both parent and child
+// use disconnected contexts for cleanup. Press Ctrl+C after observing cleanup.
 package main
 
 import (
@@ -90,6 +93,7 @@ func Workflow1(ctx workflow.Context, msg string) (string, error) {
 			logger.Debug("Workflow1 was canceled")
 
 			logger.Debug("Do cleanup")
+			// Cleanup must outlive cancellation of the workflow's original context.
 			ctx := workflow.NewDisconnectedContext(ctx)
 			if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, ActivityCleanup).Get(ctx); err != nil {
 				panic("could not execute cleanup activity")
@@ -173,7 +177,8 @@ func ActivityCancel(ctx context.Context, a, b int) (int, error) {
 	log.Println("Entering ActivityCancel")
 	defer log.Println("Leaving ActivityCancel")
 
-	// Wait for 10s, this will cause the cancellation event to be fired while waiting here
+	// This deliberately ignores cancellation for ten seconds. Real I/O should
+	// honor ctx so cancellation does not wait for an uninterruptible operation.
 	time.Sleep(10 * time.Second)
 
 	return a + b, nil

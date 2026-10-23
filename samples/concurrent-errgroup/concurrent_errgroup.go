@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/concurrent-errgroup -backend memory.
+// Two activities run through a replay-safe error group. Wait returns the first
+// branch error and cancels the group context. This demo waits for Ctrl+C.
 package main
 
 import (

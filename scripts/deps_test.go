@@ -26,7 +26,7 @@ func TestDependencyCommand(t *testing.T) {
 		{name: "network failure", action: "add", pkg: "example.org/lib@v1.0.0", module: ".", mode: "offline"},
 		{name: "all candidates checked first", action: "add", pkg: "example.org/lib@v1.0.0 example.org/new@v1.0.0", module: ".", mode: "mixed"},
 		{name: "add pinned", action: "add", pkg: "example.org/lib@v1.0.0", module: ".", wantSuccess: true, wantMutation: true},
-		{name: "nested lock", action: "lock", module: "analyzer", wantSuccess: true, wantMutation: true},
+		{name: "removed nested lock", action: "lock", module: "analyzer"},
 		{name: "audit failure", action: "lock", module: ".", mode: "audit", wantMutation: true},
 		{name: "upgrade tools too", action: "upgrade", module: ".", wantSuccess: true, wantMutation: true},
 	}

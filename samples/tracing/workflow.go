@@ -24,16 +24,15 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 	logger.Debug("Entering Workflow1", "msg", msg, "times", times, "inputs", inputs)
 	defer logger.Debug("Leaving Workflow1")
 
+	// The workflow tracer understands replay. Activities use ordinary OTel spans.
 	tracer := workflow.Tracer(ctx)
 	ctx, span := tracer.Start(ctx, "Workflow1 custom span")
 	defer span.End()
 
 	_, customSpan := tracer.Start(ctx, "Workflow1 custom inner span", trace.WithAttributes(
-		// Add additional
+		// Attach bounded attributes to a child span for this unit of workflow work.
 		attribute.String("msg", "hello world"),
 	))
-
-	// Do something
 
 	customSpan.End()
 

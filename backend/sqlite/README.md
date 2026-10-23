@@ -1,11 +1,15 @@
-# Sqlite backend
+# SQLite backend
 
-## Adding a migration
+SQLite embeds workflow persistence in one application host. File-backed workers can reopen persisted history after restart. In-memory databases do not survive process exit. This backend does not establish distributed SQLite operation across machines.
 
-1. Install [golang-migrate/migrate](https://www.github.com/golang-migrate/migrate)
-1. For sqlite support you might want to install it via ```
-go install -tags 'sqlite3','mysql' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-```
-1. ```bash
-   migrate create -ext sql -dir ./db/migrations -seq <name>
-   ```
+## Connections and migrations
+
+`NewSqliteBackend(path)` owns its connection, enables WAL, configures a busy timeout, limits the pool to one open connection and applies embedded migrations by default. `NewInMemoryBackend` creates a unique named in-memory database and retains a connection to keep it alive.
+
+`NewSqliteBackendWithDB` uses a caller-owned `*sql.DB`, does not close it and disables migrations by default. The caller must configure WAL, busy timeout and pool size. Enable migrations explicitly with `WithApplyMigrations(true)` when appropriate. Constructors can panic when initialization or automatic migration fails.
+
+## Maintaining the backend
+
+Embedded migrations live in `db/migrations`, with paired `.up.sql` and `.down.sql` files. Follow the existing sequence and preserve published migrations. Back up a consistent database before applying schema changes; copying a live main file alone can omit data still in its WAL.
+
+Run `make test-sqlite` for backend contracts and `make test-recovery` for file-backed worker recovery. See [backend operations](../../docs/backends.md) and [testing](../../docs/testing.md).

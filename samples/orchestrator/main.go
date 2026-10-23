@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/orchestrator -backend memory.
+// The orchestrator bundles a client and worker on one backend. It registers
+// definitions, processes a message through an activity, drains and exits.
 package main
 
 import (
@@ -27,7 +30,7 @@ func main() {
 		nil,
 	)
 
-	// Register workflows and activities explicitly
+	// The embedded client can submit work only after a worker knows these definitions.
 	if err := orchestrator.RegisterWorkflow(SimpleWorkflow); err != nil {
 		panic(err)
 	}
@@ -39,10 +42,10 @@ func main() {
 		panic("could not start orchestrator: " + err.Error())
 	}
 
-	// Create instance ID
+	// Generate nondeterministic identifiers outside replayed workflow functions.
 	instanceID := uuid.NewString()
 
-	// Create and run workflow using the orchestrator
+	// Submission still goes through backend storage, even with this convenience wrapper.
 	instance, err := orchestrator.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
 		InstanceID: instanceID,
 	}, SimpleWorkflow, "Hello from orchestrator!")
@@ -50,7 +53,7 @@ func main() {
 		panic("could not create workflow instance: " + err.Error())
 	}
 
-	// Wait for result using client package directly
+	// The result API works with the orchestrator's ordinary embedded client.
 	result, err := client.GetWorkflowResult[string](ctx, orchestrator.Client, instance, 10*time.Second)
 	if err != nil {
 		panic("error getting workflow result: " + err.Error())
@@ -66,7 +69,7 @@ func main() {
 	}
 }
 
-// SimpleWorkflow is a basic workflow that calls an activity and returns its result
+// SimpleWorkflow awaits a recorded activity result, which is reused during replay.
 func SimpleWorkflow(ctx workflow.Context, message string) (string, error) {
 	f := workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, ProcessMessage, message)
 
@@ -78,7 +81,7 @@ func SimpleWorkflow(ctx workflow.Context, message string) (string, error) {
 	return result, nil
 }
 
-// ProcessMessage is a simple activity that processes a message
+// ProcessMessage is ordinary Go code. External I/O would belong here, not in SimpleWorkflow.
 func ProcessMessage(ctx context.Context, message string) (string, error) {
 	return message + " (processed by activity)", nil
 }

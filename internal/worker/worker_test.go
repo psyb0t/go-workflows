@@ -15,7 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/mocks"
 	"github.com/psyb0t/go-workflows/core"
+	workermocks "github.com/psyb0t/go-workflows/internal/worker/mocks"
 	"github.com/psyb0t/go-workflows/workflow"
 )
 
@@ -109,50 +111,14 @@ type testResult struct {
 	Error  error
 }
 
-// mockTaskWorker implements TaskWorker interface for testing
-type mockTaskWorker struct {
-	mock.Mock
-}
-
-func (m *mockTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
-	args := m.Called(ctx, queues)
-	return args.Error(0)
-}
-
-func (m *mockTaskWorker) Get(ctx context.Context, queues []workflow.Queue) (*testTask, error) {
-	args := m.Called(ctx, queues)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*testTask), args.Error(1)
-}
-
-func (m *mockTaskWorker) Extend(ctx context.Context, task *testTask) error {
-	args := m.Called(ctx, task)
-	return args.Error(0)
-}
-
-func (m *mockTaskWorker) Execute(ctx context.Context, task *testTask) (*testResult, error) {
-	args := m.Called(ctx, task)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*testResult), args.Error(1)
-}
-
-func (m *mockTaskWorker) Complete(ctx context.Context, result *testResult, task *testTask) error {
-	args := m.Called(ctx, result, task)
-	return args.Error(0)
-}
-
 // Helper function to create a mock backend with basic setup
-func createMockBackend() *backend.MockBackend {
+func createMockBackend() *mocks.MockBackend {
 	return createMockBackendWithLogger(slog.Default())
 }
 
 // Helper function to create a mock backend with custom logger
-func createMockBackendWithLogger(logger *slog.Logger) *backend.MockBackend {
-	mockBackend := &backend.MockBackend{}
+func createMockBackendWithLogger(logger *slog.Logger) *mocks.MockBackend {
+	mockBackend := &mocks.MockBackend{}
 	mockBackend.On("Options").Return(&backend.Options{
 		Logger: logger,
 	})
@@ -162,7 +128,7 @@ func createMockBackendWithLogger(logger *slog.Logger) *backend.MockBackend {
 func TestNewWorker(t *testing.T) {
 	t.Run("with default options", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           2,
@@ -188,7 +154,7 @@ func TestNewWorker(t *testing.T) {
 
 	t.Run("with custom queues", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		customQueue := workflow.Queue("custom")
 		options := &WorkerOptions{
@@ -206,7 +172,7 @@ func TestNewWorker(t *testing.T) {
 
 	t.Run("system queue already included", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -230,7 +196,7 @@ func TestNewWorker(t *testing.T) {
 func TestWorker_Start(t *testing.T) {
 	t.Run("successful start", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          2,
@@ -270,7 +236,7 @@ func TestWorker_Start(t *testing.T) {
 
 	t.Run("task worker start error", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -296,7 +262,7 @@ func TestWorker_Start(t *testing.T) {
 func TestWorker_Poll(t *testing.T) {
 	t.Run("successful poll", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -319,7 +285,7 @@ func TestWorker_Poll(t *testing.T) {
 
 	t.Run("timeout returns nil", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -341,7 +307,7 @@ func TestWorker_Poll(t *testing.T) {
 
 	t.Run("get error", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -365,7 +331,7 @@ func TestWorker_Poll(t *testing.T) {
 
 	t.Run("default timeout", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -390,7 +356,7 @@ func TestWorker_Poll(t *testing.T) {
 func TestWorker_Handle(t *testing.T) {
 	t.Run("successful handle without heartbeat", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -415,7 +381,7 @@ func TestWorker_Handle(t *testing.T) {
 
 	t.Run("successful handle with heartbeat", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -442,7 +408,7 @@ func TestWorker_Handle(t *testing.T) {
 
 	t.Run("execution error", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -467,7 +433,7 @@ func TestWorker_Handle(t *testing.T) {
 
 	t.Run("completion error", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -493,7 +459,7 @@ func TestWorker_Handle(t *testing.T) {
 
 	t.Run("abort processing on heartbeat extend failure", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -528,7 +494,7 @@ func TestWorker_Handle(t *testing.T) {
 func TestWorker_HeartbeatTask(t *testing.T) {
 	t.Run("successful heartbeat", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -554,7 +520,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 
 	t.Run("heartbeat error logged", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -580,7 +546,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 
 	t.Run("context cancellation stops heartbeat", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -610,7 +576,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 	t.Run("context canceled error in extend should not be logged as error", func(t *testing.T) {
 		testLogger := newTestLogger()
 		mockBackend := createMockBackendWithLogger(testLogger.logger)
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -638,7 +604,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 	t.Run("context deadline exceeded error in extend should not be logged as error", func(t *testing.T) {
 		testLogger := newTestLogger()
 		mockBackend := createMockBackendWithLogger(testLogger.logger)
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -666,7 +632,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 	t.Run("other errors in extend should be logged as error", func(t *testing.T) {
 		testLogger := newTestLogger()
 		mockBackend := createMockBackendWithLogger(testLogger.logger)
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:           1,
@@ -698,7 +664,7 @@ func TestWorker_HeartbeatTask(t *testing.T) {
 func TestWorker_FullWorkflow(t *testing.T) {
 	t.Run("end to end task processing", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -768,7 +734,7 @@ func TestWorker_FullWorkflow(t *testing.T) {
 
 	t.Run("concurrent task processing", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          2,
@@ -849,7 +815,7 @@ func TestWorker_FullWorkflow(t *testing.T) {
 func TestWorker_ErrorHandling(t *testing.T) {
 	t.Run("polling error handling", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -883,7 +849,7 @@ func TestWorker_ErrorHandling(t *testing.T) {
 
 	t.Run("task queue add error", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -919,7 +885,7 @@ func TestWorker_ErrorHandling(t *testing.T) {
 func TestWorker_Configuration(t *testing.T) {
 	t.Run("zero pollers", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          0,
@@ -946,7 +912,7 @@ func TestWorker_Configuration(t *testing.T) {
 
 	t.Run("unlimited parallel tasks", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,
@@ -969,7 +935,7 @@ func TestWorker_Configuration(t *testing.T) {
 
 	t.Run("no polling interval", func(t *testing.T) {
 		mockBackend := createMockBackend()
-		mockTaskWorker := &mockTaskWorker{}
+		mockTaskWorker := &workermocks.MockTaskWorker[testTask, testResult]{}
 
 		options := &WorkerOptions{
 			Pollers:          1,

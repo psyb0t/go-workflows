@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/simple -backend memory.
+// The client persists typed arguments, the worker runs two activities, and the
+// client reads result 59 before shutdown. See quickstart for a smaller introduction.
 package main
 
 import (

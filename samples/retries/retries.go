@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/retries -backend memory.
+// A child fails twice, then its activity fails twice before succeeding. Retry
+// timers are persisted. This single-instance demonstration waits for Ctrl+C.
 package main
 
 import (
@@ -31,7 +34,6 @@ func main() {
 	c := client.New(b)
 
 	startWorkflow(ctx, c)
-	// startWorkflow(ctx, c)
 
 	c2 := make(chan os.Signal, 1)
 	signal.Notify(c2, os.Interrupt)
@@ -89,6 +91,8 @@ func Workflow1(ctx workflow.Context, msg string) error {
 	return nil
 }
 
+// These counters simulate failures in this one-process demo only. They are not
+// durable or safe for parallel instances; never use global state for real workflow decisions.
 var workflowCalls = 0
 
 func WorkflowWithFailures(ctx workflow.Context, msg string) error {

@@ -1,3 +1,7 @@
+// Consumer process. From make shell, run:
+// go run ./samples/simple-split-worker/worker -backend sqlite
+// Run the starter in a second shell using the same working directory and SQLite
+// file. Memory storage cannot connect these processes. Stop with Ctrl+C.
 package main
 
 import (
@@ -16,7 +20,7 @@ func main() {
 
 	b := samples.GetBackend("simple-split", false)
 
-	// Run worker
+	// Only this process polls tasks and registers executable workflow/activity code.
 	go RunWorker(ctx, b)
 
 	c2 := make(chan os.Signal, 1)

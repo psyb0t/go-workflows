@@ -1,3 +1,7 @@
+// Producer for the scaling demonstration. Start one or more matching workers,
+// then run from make shell: go run ./samples/scale/starter -backend sqlite -count 100
+// Processes must share scale.sqlite. Use an isolated server backend for multi-host
+// tests. Native goroutines are safe here because this is client code, not a workflow.
 package main
 
 import (

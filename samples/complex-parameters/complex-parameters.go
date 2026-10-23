@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/complex-parameters -backend memory.
+// Exported struct fields become persisted workflow inputs through the converter.
+// The worker runs two activities; the process then waits for Ctrl+C.
 package main
 
 import (
@@ -27,7 +30,6 @@ func main() {
 	c := client.New(b)
 
 	startWorkflow(ctx, c)
-	// startWorkflow(ctx, c)
 
 	c2 := make(chan os.Signal, 1)
 	signal.Notify(c2, os.Interrupt)
@@ -68,6 +70,7 @@ func RunWorker(ctx context.Context, mb backend.Backend) {
 	}
 }
 
+// Workflow1Args must remain compatible with inputs already saved in history.
 type Workflow1Args struct {
 	Name string
 	Age  int

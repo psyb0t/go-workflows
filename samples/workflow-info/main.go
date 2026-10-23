@@ -1,3 +1,6 @@
+// Run from make shell with: go run ./samples/workflow-info.
+// In-memory SQLite needs no external service. Compare history lengths in the
+// logs before and after each activity; the process exits when the workflow finishes.
 package main
 
 import (
@@ -15,7 +18,7 @@ import (
 	"github.com/psyb0t/go-workflows/backend/sqlite"
 )
 
-// Workflow demonstrates accessing workflow info including history length
+// Workflow observes persisted execution metadata as activity events enter history.
 func Workflow(ctx workflow.Context) error {
 	// Get workflow info at the start
 	info := workflow.InstanceExecutionDetails(ctx)

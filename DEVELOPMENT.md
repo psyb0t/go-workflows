@@ -1,27 +1,3 @@
-## Setup dependencies for development and tests
+# Development
 
-1. `docker-compose up`
-
-## Build
-
-```bash
-make build
-```
-
-## Test
-
-```bash
-make test
-```
-
-## Lint
-
-Install [golangci-lint](https://golangci-lint.run/usage/install/) and run
-
-```bash
-make lint
-```
-
-### Use custom linter
-
-1. Build analyzer `go build -tags analyzerplugin -buildmode=plugin analyzer/plugin/plugin.go`
+See [development commands](docs/development.md), [testing](docs/testing.md) and [releases](docs/releases.md). The host needs Docker, Make and Git. Make runs the pinned toolchains and starts isolated test infrastructure.
