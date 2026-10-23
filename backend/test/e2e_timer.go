@@ -2,14 +2,18 @@ package test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 var e2eTimerTests = []backendTest{
@@ -21,8 +25,11 @@ var e2eTimerTests = []backendTest{
 			}
 			wf := func(ctx workflow.Context) error {
 				_, err := workflow.ScheduleTimer(ctx, time.Second*10).Get(ctx)
-				if err != nil && err != workflow.Canceled {
-					return err
+				if err != nil && !errors.Is(err, workflow.Canceled) {
+					if err != nil {
+						return ctxerrors.Wrap(err, "execute e2e timer")
+					}
+					return nil
 				}
 
 				return nil
@@ -55,11 +62,16 @@ var e2eTimerTests = []backendTest{
 				cancel()
 
 				// Force the checkpoint before continuing the execution
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				_, err := f.Get(ctx)
-				if err != nil && err != workflow.Canceled {
-					return err
+				if err != nil && !errors.Is(err, workflow.Canceled) {
+					if err != nil {
+						return ctxerrors.Wrap(err, "execute e2e timer")
+					}
+					return nil
 				}
 
 				return nil
@@ -94,21 +106,30 @@ var e2eTimerTests = []backendTest{
 				f := workflow.ScheduleTimer(tctx, time.Second*10)
 
 				// Force the checkpoint before continuing the execution
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				// Cancel timer
 				cancel()
 
 				// Force another checkpoint
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				cancel()
 
 				// Force another checkpoint
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
-				if _, err := f.Get(ctx); err != nil && err != workflow.Canceled {
-					return err
+				if _, err := f.Get(ctx); err != nil && !errors.Is(err, workflow.Canceled) {
+					if err != nil {
+						return ctxerrors.Wrap(err, "execute e2e timer")
+					}
+					return nil
 				}
 
 				return nil
@@ -137,16 +158,23 @@ var e2eTimerTests = []backendTest{
 				f := workflow.ScheduleTimer(tctx, time.Second*10)
 
 				// Force the checkpoint before continuing the execution
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				// Cancel timer
 				cancel()
 
 				// Force another checkpoint
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
-				if _, err := f.Get(ctx); err != nil && err != workflow.Canceled {
-					return err
+				if _, err := f.Get(ctx); err != nil && !errors.Is(err, workflow.Canceled) {
+					if err != nil {
+						return ctxerrors.Wrap(err, "execute e2e timer")
+					}
+					return nil
 				}
 
 				return nil
@@ -175,14 +203,18 @@ var e2eTimerTests = []backendTest{
 				x := workflow.ScheduleTimer(tctx, time.Millisecond*200)
 
 				// 1) Force an end to the execution slice
-				workflow.Sleep(ctx, time.Millisecond)
+				if err := workflow.Sleep(ctx, time.Millisecond); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				// 2) Start of second execution slice
 				// 2) Cancel timer. It should not have fired at this point,
 				//    we only waited for a millisecond
 				cancel()
 
-				x.Get(ctx)
+				if _, err := x.Get(ctx); err != nil {
+					require.ErrorIs(t, err, workflow.Canceled)
+				}
 
 				// 2) Force the execution slice to be active for as long as it takes to fire the timer
 				time.Sleep(time.Millisecond * 200)

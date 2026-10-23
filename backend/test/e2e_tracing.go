@@ -6,13 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func setupTracing(b TestBackend) *tracetest.InMemoryExporter {
@@ -31,7 +34,6 @@ var e2eTracingTests = []backendTest{
 			exporter := setupTracing(b)
 
 			wf := func(ctx workflow.Context) error {
-
 				return nil
 			}
 			register(t, ctx, w, []interface{}{wf}, nil)
@@ -64,9 +66,13 @@ var e2eTracingTests = []backendTest{
 			exporter := setupTracing(b)
 
 			wf := func(ctx workflow.Context) error {
-				workflow.ScheduleTimer(ctx, time.Millisecond*20).Get(ctx)
+				if _, err := workflow.ScheduleTimer(ctx, time.Millisecond*20).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
-				workflow.Sleep(ctx, time.Millisecond*10)
+				if err := workflow.Sleep(ctx, time.Millisecond*10); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				return nil
 			}
@@ -112,7 +118,9 @@ var e2eTracingTests = []backendTest{
 				ctx, span := workflow.Tracer(ctx).Start(ctx, "custom-span")
 				defer span.End()
 
-				workflow.Sleep(ctx, time.Millisecond*10)
+				if err := workflow.Sleep(ctx, time.Millisecond*10); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				return nil
 			}
@@ -154,18 +162,27 @@ var e2eTracingTests = []backendTest{
 			exporter := setupTracing(b)
 
 			swf := func(ctx workflow.Context) error {
-				workflow.Sleep(ctx, time.Microsecond*10)
+				if err := workflow.Sleep(ctx, time.Microsecond*10); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				return nil
 			}
 
 			wf := func(ctx workflow.Context) error {
 				_, err := workflow.CreateSubWorkflowInstance[any](ctx, workflow.DefaultSubWorkflowOptions, "swf").Get(ctx)
-				return err
+				if err != nil {
+					return ctxerrors.Wrap(err, "execute e2e tracing")
+				}
+				return nil
 			}
 
-			w.RegisterWorkflow(wf, registry.WithName("wf"))
-			w.RegisterWorkflow(swf, registry.WithName("swf"))
+			if err := w.RegisterWorkflow(wf, registry.WithName("wf")); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
+			if err := w.RegisterWorkflow(swf, registry.WithName("swf")); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 
 			err := w.Start(ctx)
 			require.NoError(t, err)
@@ -209,7 +226,9 @@ var e2eTracingTests = []backendTest{
 				ctx, span2 := workflow.Tracer(ctx).Start(ctx, "inner-span2")
 				defer span2.End()
 
-				workflow.Sleep(ctx, time.Microsecond*10)
+				if err := workflow.Sleep(ctx, time.Microsecond*10); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				return nil
 			}

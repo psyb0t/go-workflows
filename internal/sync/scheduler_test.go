@@ -23,12 +23,12 @@ func Test_Scheduler(t *testing.T) {
 
 	require.Equal(t, 0, hit)
 
-	s.Execute()
+	require.NoError(t, s.Execute())
 	require.Equal(t, 1, hit)
 	require.Equal(t, 1, s.RunningCoroutines())
 
 	// Coroutine is finished
-	s.Execute()
+	require.NoError(t, s.Execute())
 	require.Equal(t, 1, hit)
 	require.Equal(t, 0, s.RunningCoroutines())
 }
@@ -66,7 +66,7 @@ func Test_Scheduler_OneCoroutineAtATime(t *testing.T) {
 	})
 
 	for i := 0; i < 10; i++ {
-		s.Execute()
+		require.NoError(t, s.Execute())
 	}
 
 	require.Equal(t, 0, s.RunningCoroutines())
@@ -93,7 +93,7 @@ func Test_Scheduler_ExecuteUntilBlocked(t *testing.T) {
 		return nil
 	})
 
-	s.Execute()
+	require.NoError(t, s.Execute())
 
 	require.Equal(t, 4, hits)
 }
@@ -129,7 +129,7 @@ func Test_Scheduler_ExecuteUntilAllBlocked(t *testing.T) {
 		return nil
 	})
 
-	s.Execute()
+	require.NoError(t, s.Execute())
 	require.Equal(t, 1, s.RunningCoroutines())
 	require.Equal(t, 6, hits)
 }
@@ -147,12 +147,12 @@ func Test_Scheduler_Exit(t *testing.T) {
 		}
 	})
 
-	s.Execute()
+	require.NoError(t, s.Execute())
 
 	s.Exit()
 
-	s.Execute()
-	s.Execute()
+	require.NoError(t, s.Execute())
+	require.NoError(t, s.Execute())
 
 	require.Equal(t, 1, hits)
 }
@@ -168,6 +168,6 @@ func Test_Scheduler_Panic(t *testing.T) {
 	err := s.Execute()
 
 	require.Error(t, err)
-	require.Equal(t, "panic: something went wrong", err.Error())
+	require.ErrorContains(t, err, "panic: something went wrong")
 	require.Equal(t, 0, s.RunningCoroutines())
 }

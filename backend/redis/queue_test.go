@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_TaskQueue(t *testing.T) {
-	// These tests rely on redis being running on localhost:6379. Skip this test if `-short` is set.
 	if testing.Short() {
 		t.Skip()
 	}
@@ -21,9 +21,9 @@ func Test_TaskQueue(t *testing.T) {
 	taskType := "taskType"
 
 	client := redis.NewUniversalClient(&redis.UniversalOptions{
-		Addrs:    []string{"localhost:6379"},
+		Addrs:    []string{testInfra.Address()},
 		Username: "",
-		Password: "RedisPassw0rd",
+		Password: testInfra.Password,
 		DB:       1,
 	})
 

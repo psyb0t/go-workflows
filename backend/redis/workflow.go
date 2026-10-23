@@ -3,18 +3,20 @@ package redis
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/propagators"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/propagators"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func (rb *redisBackend) PrepareWorkflowQueues(ctx context.Context, queues []workflow.Queue) error {
@@ -23,13 +25,13 @@ func (rb *redisBackend) PrepareWorkflowQueues(ctx context.Context, queues []work
 
 func (rb *redisBackend) GetWorkflowTask(ctx context.Context, queues []workflow.Queue) (*backend.WorkflowTask, error) {
 	if err := scheduleFutureEvents(ctx, rb); err != nil {
-		return nil, fmt.Errorf("scheduling future events: %w", err)
+		return nil, ctxerrors.Wrap(err, "scheduling future events")
 	}
 
 	// Try to get a workflow task, this locks the instance when it dequeues one
 	instanceTask, err := rb.workflowQueue.Dequeue(ctx, rb.rdb, queues, rb.options.WorkflowLockTimeout, rb.options.BlockTimeout)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute workflow")
 	}
 
 	if instanceTask == nil {
@@ -38,13 +40,13 @@ func (rb *redisBackend) GetWorkflowTask(ctx context.Context, queues []workflow.Q
 
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKeyFromSegment(instanceTask.ID))
 	if err != nil {
-		return nil, fmt.Errorf("reading workflow instance: %w", err)
+		return nil, ctxerrors.Wrap(err, "reading workflow instance")
 	}
 
 	// Read all pending events for this instance
 	msgs, err := rb.rdb.XRange(ctx, rb.keys.pendingEventsKey(instanceState.Instance), "-", "+").Result()
 	if err != nil {
-		return nil, fmt.Errorf("reading event stream: %w", err)
+		return nil, ctxerrors.Wrap(err, "reading event stream")
 	}
 
 	payloadKeys := make([]string, 0, len(msgs))
@@ -53,7 +55,7 @@ func (rb *redisBackend) GetWorkflowTask(ctx context.Context, queues []workflow.Q
 		var event *history.Event
 
 		if err := json.Unmarshal([]byte(msg.Values["event"].(string)), &event); err != nil {
-			return nil, fmt.Errorf("unmarshaling event: %w", err)
+			return nil, ctxerrors.Wrap(err, "unmarshaling event")
 		}
 
 		payloadKeys = append(payloadKeys, event.ID)
@@ -64,13 +66,13 @@ func (rb *redisBackend) GetWorkflowTask(ctx context.Context, queues []workflow.Q
 	if len(payloadKeys) > 0 {
 		res, err := rb.rdb.HMGet(ctx, rb.keys.payloadKey(instanceState.Instance), payloadKeys...).Result()
 		if err != nil {
-			return nil, fmt.Errorf("reading payloads: %w", err)
+			return nil, ctxerrors.Wrap(err, "reading payloads")
 		}
 
 		for i, event := range newEvents {
 			event.Attributes, err = history.DeserializeAttributes(event.Type, []byte(res[i].(string)))
 			if err != nil {
-				return nil, fmt.Errorf("deserializing attributes for event %v: %w", event.Type, err)
+				return nil, ctxerrors.Wrapf(err, "deserializing attributes for event %v", event.Type)
 			}
 		}
 	}
@@ -91,8 +93,11 @@ func (rb *redisBackend) ExtendWorkflowTask(ctx context.Context, task *backend.Wo
 	_, err := rb.rdb.Pipelined(ctx, func(p redis.Pipeliner) error {
 		return rb.workflowQueue.Extend(ctx, p, task.Queue, task.ID)
 	})
+	if err != nil {
+		return ctxerrors.Wrap(err, "execute workflow")
+	}
 
-	return err
+	return nil
 }
 
 func (rb *redisBackend) CompleteWorkflowTask(
@@ -128,7 +133,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 	for _, event := range executedEvents {
 		eventData, payloadData, err := marshalEvent(event)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute workflow")
 		}
 
 		args = append(args, event.ID, eventData, payloadData, event.SequenceID)
@@ -171,7 +176,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 	for _, timerEvent := range timerEvents {
 		eventData, payloadEventData, err := marshalEvent(timerEvent)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute workflow")
 		}
 
 		args = append(args, timerEvent.ID, strconv.FormatInt(timerEvent.VisibleAt.UnixMilli(), 10), eventData, payloadEventData)
@@ -195,7 +200,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 			Queue:    string(queue),
 		})
 		if err != nil {
-			return fmt.Errorf("marshaling activity data: %w", err)
+			return ctxerrors.Wrap(err, "marshaling activity data")
 		}
 
 		activityQueue := string(queue)
@@ -231,12 +236,12 @@ func (rb *redisBackend) CompleteWorkflowTask(
 				CreatedAt: time.Now(),
 			})
 			if err != nil {
-				return fmt.Errorf("marshaling new instance state: %w", err)
+				return ctxerrors.Wrap(err, "marshaling new instance state")
 			}
 
 			ib, err := json.Marshal(targetInstance)
 			if err != nil {
-				return fmt.Errorf("marshaling instance: %w", err)
+				return ctxerrors.Wrap(err, "marshaling instance")
 			}
 
 			args = append(args, isb, ib)
@@ -247,7 +252,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 			}, history.ScheduleEventID(m.WorkflowInstance.ParentEventID))
 			eventData, payloadEventData, err := marshalEvent(pfe)
 			if err != nil {
-				return fmt.Errorf("marshaling event: %w", err)
+				return ctxerrors.Wrap(err, "marshaling event")
 			}
 
 			args = append(args, pfe.ID, eventData, payloadEventData)
@@ -257,7 +262,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 		} else {
 			targetInstanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(&targetInstance))
 			if err != nil {
-				return fmt.Errorf("reading target instance: %w", err)
+				return ctxerrors.Wrap(err, "reading target instance")
 			}
 
 			queueKeys := rb.workflowQueue.Keys(core.Queue(targetInstanceState.Queue))
@@ -268,7 +273,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 		for _, m := range events {
 			eventData, payloadEventData, err := marshalEvent(m.HistoryEvent)
 			if err != nil {
-				return fmt.Errorf("marshaling event: %w", err)
+				return ctxerrors.Wrap(err, "marshaling event")
 			}
 
 			args = append(args, m.HistoryEvent.ID, eventData, payloadEventData)
@@ -284,7 +289,7 @@ func (rb *redisBackend) CompleteWorkflowTask(
 	// Run script
 	_, err := completeWorkflowTaskCmd.Run(ctx, rb.rdb, keys, args...).Result()
 	if err != nil {
-		return fmt.Errorf("completing workflow task: %w", err)
+		return ctxerrors.Wrap(err, "completing workflow task")
 	}
 
 	if state == core.WorkflowInstanceStateFinished || state == core.WorkflowInstanceStateContinuedAsNew {
@@ -302,13 +307,13 @@ func (rb *redisBackend) CompleteWorkflowTask(
 
 		if expiration > 0 {
 			if err := rb.setWorkflowInstanceExpiration(ctx, instance, expiration); err != nil {
-				return fmt.Errorf("setting workflow instance expiration: %w", err)
+				return ctxerrors.Wrap(err, "setting workflow instance expiration")
 			}
 		}
 
 		if rb.options.RemoveContinuedAsNewInstances && state == core.WorkflowInstanceStateContinuedAsNew {
 			if err := rb.RemoveWorkflowInstance(ctx, instance); err != nil {
-				return fmt.Errorf("removing workflow instance: %w", err)
+				return ctxerrors.Wrap(err, "removing workflow instance")
 			}
 		}
 	}
@@ -319,12 +324,12 @@ func (rb *redisBackend) CompleteWorkflowTask(
 func marshalEvent(event *history.Event) (string, string, error) {
 	eventData, err := marshalEventWithoutAttributes(event)
 	if err != nil {
-		return "", "", fmt.Errorf("marshaling event payload: %w", err)
+		return "", "", ctxerrors.Wrap(err, "marshaling event payload")
 	}
 
 	payloadEventData, err := json.Marshal(event.Attributes)
 	if err != nil {
-		return "", "", fmt.Errorf("marshaling event payload: %w", err)
+		return "", "", ctxerrors.Wrap(err, "marshaling event payload")
 	}
 	return eventData, string(payloadEventData), nil
 }

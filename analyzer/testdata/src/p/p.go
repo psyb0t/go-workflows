@@ -4,11 +4,10 @@ package p
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/workflow"
-
-	"sync"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 var foo int = 42

@@ -7,12 +7,13 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -46,13 +47,19 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 	log.Println("Started workflow", wf.InstanceID)
 
 	time.Sleep(2 * time.Second)
-	c.SignalWorkflow(ctx, wf.InstanceID, "test", 42)
+	if err := c.SignalWorkflow(ctx, wf.InstanceID, "test", 42); err != nil {
+		panic(err)
+	}
 
 	time.Sleep(2 * time.Second)
-	c.SignalWorkflow(ctx, wf.InstanceID, "test2", 42)
+	if err := c.SignalWorkflow(ctx, wf.InstanceID, "test2", 42); err != nil {
+		panic(err)
+	}
 
 	time.Sleep(2 * time.Second)
-	c.SignalWorkflow(ctx, subID, "sub-signal", 42)
+	if err := c.SignalWorkflow(ctx, subID, "sub-signal", 42); err != nil {
+		panic(err)
+	}
 
 	log.Println("Signaled workflow", wf.InstanceID)
 }
@@ -60,8 +67,12 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(SubWorkflow1)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

@@ -6,11 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type CustomError struct {
@@ -98,8 +101,11 @@ var e2eActivityTests = []backendTest{
 						MaxAttempts: 4,
 					},
 				}, a).Get(ctx)
+				if err != nil {
+					return ctxerrors.Wrap(err, "execute e2e activity")
+				}
 
-				return err
+				return nil
 			}
 			register(t, ctx, w, []interface{}{wf}, []interface{}{a})
 
@@ -126,8 +132,11 @@ var e2eActivityTests = []backendTest{
 						MaxAttempts: 1,
 					},
 				}, a).Get(ctx)
+				if err != nil {
+					return ctxerrors.Wrap(err, "execute e2e activity")
+				}
 
-				return err
+				return nil
 			}
 			register(t, ctx, w, []interface{}{wf}, []interface{}{a})
 

@@ -6,11 +6,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
 
-	"github.com/cschleiden/go-workflows/backend/sqlite"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
+
+	"github.com/psyb0t/go-workflows/backend/sqlite"
 )
 
 // Workflow demonstrates accessing workflow info including history length
@@ -23,7 +25,7 @@ func Workflow(ctx workflow.Context) error {
 	// Execute an activity
 	_, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, Activity).Get(ctx)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute main")
 	}
 
 	// Check history length again after activity
@@ -33,7 +35,7 @@ func Workflow(ctx workflow.Context) error {
 	// Execute another activity
 	_, err = workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, Activity).Get(ctx)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute main")
 	}
 
 	// Check history length again
@@ -58,8 +60,12 @@ func main() {
 	w := worker.New(b, nil)
 
 	// Register workflow and activity
-	w.RegisterWorkflow(Workflow)
-	w.RegisterActivity(Activity)
+	if err := w.RegisterWorkflow(Workflow); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity); err != nil {
+		panic(err)
+	}
 
 	// Start worker
 	if err := w.Start(ctx); err != nil {

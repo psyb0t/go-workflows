@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/diag"
 )
 
 func Test_Diag_GetWorkflowInstances(t *testing.T) {

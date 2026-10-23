@@ -3,16 +3,18 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
+	"github.com/psyb0t/ctxerrors"
 
-	// "github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	a "github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/command"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/tracing"
+
+	// "github.com/psyb0t/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
 )
 
 type SubWorkflowOptions struct {
@@ -73,7 +75,7 @@ func createSubWorkflowInstance[TResult any](ctx Context, options SubWorkflowOpti
 	cv := contextvalue.Converter(ctx)
 	inputs, err := a.ArgsToInputs(cv, args...)
 	if err != nil {
-		f.Set(*new(TResult), fmt.Errorf("converting subworkflow input: %w", err))
+		f.Set(*new(TResult), ctxerrors.Wrap(err, "converting subworkflow input"))
 		return f
 	}
 
@@ -84,7 +86,7 @@ func createSubWorkflowInstance[TResult any](ctx Context, options SubWorkflowOpti
 	propagators := propagators(ctx)
 	metadata := &metadata.WorkflowMetadata{}
 	if err := injectFromWorkflow(ctx, metadata, propagators); err != nil {
-		f.Set(*new(TResult), fmt.Errorf("injecting workflow context: %w", err))
+		f.Set(*new(TResult), ctxerrors.Wrap(err, "injecting workflow context"))
 		return f
 	}
 

@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/backend/metrics"
 )
 
 type Timer struct {

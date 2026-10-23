@@ -2,36 +2,41 @@ package tester
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activity"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/signals"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/activity"
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/command"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/signals"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/workflow/executor"
 )
 
 type testHistoryProvider struct {
@@ -198,11 +203,13 @@ func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...Workflow
 		Logger:         slog.Default(),
 		Converter:      converter.DefaultConverter,
 		MaxHistorySize: 10_000,
+		Propagators:    slices.Clone(backend.DefaultOptions.ContextPropagators),
 	}
 
 	for _, o := range opts {
 		o(options)
 	}
+	options.Logger = log.ScopeLogger(options.Logger)
 
 	// Start with the current wall-c time unless InitialTime is set
 	c := clock.NewMock()
@@ -250,7 +257,9 @@ func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...Workflow
 
 	// Register internal activities
 	signalActivities := &signals.Activities{Signaler: &signaler[TResult]{wt}}
-	registry.RegisterActivity(signalActivities)
+	if err := registry.RegisterActivity(signalActivities); err != nil {
+		panic(err)
+	}
 
 	// Always register the workflow under test
 	if err := wt.registry.RegisterWorkflow(workflow); err != nil {
@@ -293,7 +302,10 @@ func (wt *workflowTester[TResult]) ActivityMock() *mock.Mock {
 // OnActivityByName registers a mock activity with the given name.
 func (wt *workflowTester[TResult]) OnActivityByName(name string, activity workflow.Activity, args ...any) *mock.Call {
 	// Register activity so that we can correctly identify its arguments later
-	wt.registry.RegisterActivity(activity, registry.WithName(name))
+	var alreadyRegistered *registry.ErrActivityAlreadyRegistered
+	if err := wt.registry.RegisterActivity(activity, registry.WithName(name)); err != nil && !errors.As(err, &alreadyRegistered) {
+		panic(err)
+	}
 
 	wt.mockedActivities[name] = true
 	return wt.ma.On(name, args...)
@@ -302,7 +314,10 @@ func (wt *workflowTester[TResult]) OnActivityByName(name string, activity workfl
 // OnActivity registers a mock activity.
 func (wt *workflowTester[TResult]) OnActivity(activity workflow.Activity, args ...any) *mock.Call {
 	// Register activity so that we can correctly identify its arguments later
-	wt.registry.RegisterActivity(activity)
+	var alreadyRegistered *registry.ErrActivityAlreadyRegistered
+	if err := wt.registry.RegisterActivity(activity); err != nil && !errors.As(err, &alreadyRegistered) {
+		panic(err)
+	}
 
 	name := fn.Name(activity)
 	wt.mockedActivities[name] = true
@@ -312,7 +327,10 @@ func (wt *workflowTester[TResult]) OnActivity(activity workflow.Activity, args .
 // OnSubWorkflowByName registers a mock sub-workflow with the given name.
 func (wt *workflowTester[TResult]) OnSubWorkflowByName(name string, workflow workflow.Workflow, args ...any) *mock.Call {
 	// Register workflow so that we can correctly identify its arguments later
-	wt.registry.RegisterWorkflow(workflow, registry.WithName(name))
+	var alreadyRegistered *registry.ErrWorkflowAlreadyRegistered
+	if err := wt.registry.RegisterWorkflow(workflow, registry.WithName(name)); err != nil && !errors.As(err, &alreadyRegistered) {
+		panic(err)
+	}
 
 	wt.mockedWorkflows[name] = true
 	return wt.mw.On(name, args...)
@@ -321,7 +339,10 @@ func (wt *workflowTester[TResult]) OnSubWorkflowByName(name string, workflow wor
 // OnSubWorkflow registers a mock sub-workflow.
 func (wt *workflowTester[TResult]) OnSubWorkflow(workflow workflow.Workflow, args ...any) *mock.Call {
 	// Register workflow so that we can correctly identify its arguments later
-	wt.registry.RegisterWorkflow(workflow)
+	var alreadyRegistered *registry.ErrWorkflowAlreadyRegistered
+	if err := wt.registry.RegisterWorkflow(workflow); err != nil && !errors.As(err, &alreadyRegistered) {
+		panic(err)
+	}
 
 	name := fn.Name(workflow)
 	wt.mockedWorkflows[name] = true
@@ -332,7 +353,7 @@ func (wt *workflowTester[TResult]) OnSubWorkflow(workflow workflow.Workflow, arg
 func (wt *workflowTester[TResult]) Execute(ctx context.Context, args ...any) {
 	for _, propagator := range wt.propagators {
 		if err := propagator.Inject(ctx, wt.wfm); err != nil {
-			panic(fmt.Errorf("failed to inject context: %w", err))
+			panic(ctxerrors.Wrap(err, "failed to inject context"))
 		}
 	}
 
@@ -371,7 +392,7 @@ func (wt *workflowTester[TResult]) Execute(ctx context.Context, args ...any) {
 				wt.options.MaxHistorySize,
 			)
 			if err != nil {
-				panic(fmt.Errorf("could not create workflow executor: %v", err))
+				panic(ctxerrors.Wrap(err, "create workflow executor"))
 			}
 
 			result, err := e.ExecuteTask(ctx, t)
@@ -531,13 +552,22 @@ func (wt *workflowTester[TResult]) fireTimer() bool {
 			// Schedule timer
 			wt.wallClockTimer = wt.wallClock.AfterFunc(remainingTime, func() {
 				wt.callbacks <- func() *history.WorkflowEvent {
-					// Remove timer
-					wt.timers = wt.timers[1:]
-					wt.wallClockTimer = nil
-
-					return t.fire()
+					for i, pending := range wt.timers {
+						if pending != t {
+							continue
+						}
+						wt.timers = append(wt.timers[:i], wt.timers[i+1:]...)
+						if wt.wallClockTimer == t.wallClockTimer {
+							wt.wallClockTimer = nil
+						}
+						t.wallClockTimer = nil
+						return t.fire()
+					}
+					// Cancellation can race delivery of an already-fired timer callback.
+					return nil
 				}
 			})
+			t.wallClockTimer = wt.wallClockTimer
 		}
 	}
 
@@ -592,7 +622,9 @@ func (wt *workflowTester[TResult]) CancelWorkflowInstance(wfi *core.WorkflowInst
 
 // SignalWorkflow sends a signal to the workflow under test.
 func (wt *workflowTester[TResult]) SignalWorkflow(name string, value any) {
-	wt.SignalWorkflowInstance(wt.wfi, name, value)
+	if err := wt.SignalWorkflowInstance(wt.wfi, name, value); err != nil {
+		panic(err)
+	}
 }
 
 // SignalWorkflowInstance sends a signal to the given workflow instance.
@@ -640,7 +672,10 @@ func (wt *workflowTester[TResult]) WorkflowResult() (TResult, error) {
 	}
 
 	err := workflowerrors.ToError(wt.workflowErr)
-	return r, err
+	if err != nil {
+		return r, ctxerrors.Wrap(err, "execute tester")
+	}
+	return r, nil
 }
 
 // AssertExpectations asserts that all expected activities were executed.
@@ -654,8 +689,6 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 	atomic.AddInt32(&wt.runningActivities, 1)
 
 	go func() {
-		defer atomic.AddInt32(&wt.runningActivities, -1)
-
 		var activityErr error
 		var activityResult payload.Payload
 
@@ -679,7 +712,7 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 					for _, propagator := range wt.propagators {
 						ctx, err = propagator.Extract(ctx, wfm)
 						if err != nil {
-							panic(fmt.Errorf("could not extract context from workflow metadata: %w", err))
+							panic(ctxerrors.Wrap(err, "could not extract context from workflow metadata"))
 						}
 					}
 
@@ -724,6 +757,7 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 		}
 
 		wt.callbacks <- func() *history.WorkflowEvent {
+			atomic.AddInt32(&wt.runningActivities, -1)
 			var ne *history.Event
 
 			if activityErr != nil {
@@ -780,6 +814,10 @@ func (wt *workflowTester[TResult]) cancelTimer(instance *core.WorkflowInstance, 
 			// If this was the next timer to fire, stop the timer
 			if t.wallClockTimer != nil {
 				t.wallClockTimer.Stop()
+				if wt.wallClockTimer == t.wallClockTimer {
+					wt.wallClockTimer = nil
+				}
+				t.wallClockTimer = nil
 			}
 
 			wt.timers = append(wt.timers[:i], wt.timers[i+1:]...)

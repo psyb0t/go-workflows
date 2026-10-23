@@ -3,7 +3,7 @@ package redis
 import (
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend"
 )
 
 type RedisOptions struct {

@@ -2,21 +2,23 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/internal/activity"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
-	im "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/internal/activity"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
+	im "github.com/psyb0t/go-workflows/internal/metrics"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func NewActivityWorker(
@@ -54,7 +56,7 @@ func (atw *ActivityTaskWorker) Complete(ctx context.Context, result *history.Eve
 
 func (atw *ActivityTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
 	if err := atw.backend.PrepareActivityQueues(ctx, queues); err != nil {
-		return fmt.Errorf("preparing activity queues: %w", err)
+		return ctxerrors.Wrap(err, "preparing activity queues")
 	}
 
 	return nil

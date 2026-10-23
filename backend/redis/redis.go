@@ -3,17 +3,19 @@ package redis
 import (
 	"context"
 	"embed"
-	"fmt"
 	"io/fs"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
 )
 
 var _ backend.Backend = (*redisBackend)(nil)
@@ -47,12 +49,12 @@ func NewRedisBackend(client redis.UniversalClient, opts ...RedisBackendOption) (
 
 	workflowQueue, err := newTaskQueue[workflowData](ctx, client, options.KeyPrefix, "workflows", options.WorkerName)
 	if err != nil {
-		return nil, fmt.Errorf("creating workflow task queue: %w", err)
+		return nil, ctxerrors.Wrap(err, "creating workflow task queue")
 	}
 
 	activityQueue, err := newTaskQueue[activityData](ctx, client, options.KeyPrefix, "activities", options.WorkerName)
 	if err != nil {
-		return nil, fmt.Errorf("creating activity task queue: %w", err)
+		return nil, ctxerrors.Wrap(err, "creating activity task queue")
 	}
 
 	rb := &redisBackend{
@@ -77,7 +79,7 @@ func NewRedisBackend(client redis.UniversalClient, opts ...RedisBackendOption) (
 	}
 
 	if err := loadScripts(ctx, rb.rdb, cmdMapping); err != nil {
-		return nil, fmt.Errorf("loading Lua scripts: %w", err)
+		return nil, ctxerrors.Wrap(err, "loading Lua scripts")
 	}
 
 	return rb, nil
@@ -87,13 +89,13 @@ func loadScripts(ctx context.Context, rdb redis.UniversalClient, cmdMapping map[
 	for scriptFile, cmd := range cmdMapping {
 		scriptContent, err := fs.ReadFile(luaScripts, "scripts/"+scriptFile)
 		if err != nil {
-			return fmt.Errorf("reading Lua script %s: %w", scriptFile, err)
+			return ctxerrors.Wrapf(err, "reading Lua script %s", scriptFile)
 		}
 
 		*cmd = redis.NewScript(string(scriptContent))
 
 		if c := (*cmd).Load(ctx, rdb); c.Err() != nil {
-			return fmt.Errorf("loading Lua script %s: %w", scriptFile, c.Err())
+			return ctxerrors.Wrapf(c.Err(), "loading Lua script %s", scriptFile)
 		}
 	}
 

@@ -1,18 +1,21 @@
 package workflowstate
 
 import (
-	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/command"
-	log "github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/sync"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/command"
+	log "github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/sync"
 )
 
 type key int
@@ -31,13 +34,13 @@ func AsDecodingSettable[T any](cv converter.Converter, name string, f sync.Setta
 		Name: name,
 		Set: func(v payload.Payload, err error) error {
 			if f.HasValue() {
-				return fmt.Errorf("future already has value")
+				return ctxerrors.Wrapf(commerr.ErrInvalidState, "future already has value")
 			}
 
 			var t T
 			if v != nil {
 				if err := cv.From(v, &t); err != nil {
-					return fmt.Errorf("failed to decode future: %v", err)
+					return ctxerrors.Wrap(err, "decode future")
 				}
 			}
 

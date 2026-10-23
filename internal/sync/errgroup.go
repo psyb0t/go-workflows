@@ -1,5 +1,7 @@
 package sync
 
+import "github.com/psyb0t/ctxerrors"
+
 // ErrGroup provides a way to run functions concurrently and collect the first error.
 //
 // It is conceptually similar to golang.org/x/sync/errgroup.Group but adapted to the
@@ -93,7 +95,10 @@ func (g *errGroup) Wait(ctx Context) error {
 	}
 
 	if _, err := g.done.Get(ctx); err != nil {
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute errgroup")
+		}
+		return nil
 	}
 	return g.firstErr
 }

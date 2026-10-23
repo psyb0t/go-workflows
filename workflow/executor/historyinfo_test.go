@@ -5,18 +5,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/registry"
+	wf "github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_InstanceExecutionDetails_SimpleWorkflow(t *testing.T) {
@@ -34,7 +35,9 @@ func Test_InstanceExecutionDetails_SimpleWorkflow(t *testing.T) {
 		return nil
 	}
 
-	r.RegisterWorkflow(simpleWorkflow)
+	if err := r.RegisterWorkflow(simpleWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	task := startWorkflowTask(i.InstanceID, simpleWorkflow)
 	result, err := e.ExecuteTask(context.Background(), task)
@@ -62,7 +65,9 @@ func Test_InstanceExecutionDetails_WithActivity(t *testing.T) {
 		info := wf.InstanceExecutionDetails(ctx)
 		lengthBeforeActivity = info.HistoryLength
 
-		wf.ExecuteActivity[int](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx)
+		if _, err := wf.ExecuteActivity[int](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = wf.InstanceExecutionDetails(ctx)
 		lengthAfterActivity = info.HistoryLength
@@ -70,8 +75,12 @@ func Test_InstanceExecutionDetails_WithActivity(t *testing.T) {
 		return nil
 	}
 
-	r.RegisterWorkflow(workflowWithActivity)
-	r.RegisterActivity(activity1)
+	if err := r.RegisterWorkflow(workflowWithActivity); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
+	if err := r.RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	inputs, _ := converter.DefaultConverter.To(42)
 	result, _ := converter.DefaultConverter.To(42)
@@ -167,7 +176,9 @@ func Test_InstanceExecutionDetails_DuringReplay(t *testing.T) {
 		info := wf.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
 
-		wf.ExecuteActivity[int](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx)
+		if _, err := wf.ExecuteActivity[int](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		// Capture length after activity
 		info = wf.InstanceExecutionDetails(ctx)
@@ -176,8 +187,12 @@ func Test_InstanceExecutionDetails_DuringReplay(t *testing.T) {
 		return nil
 	}
 
-	r.RegisterWorkflow(workflowWithActivity)
-	r.RegisterActivity(activity1)
+	if err := r.RegisterWorkflow(workflowWithActivity); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
+	if err := r.RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	inputs, _ := converter.DefaultConverter.To(42)
 	result, _ := converter.DefaultConverter.To(42)
@@ -258,12 +273,16 @@ func Test_InstanceExecutionDetails_Incremental(t *testing.T) {
 		info := wf.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
 
-		wf.Sleep(ctx, time.Millisecond)
+		if err := wf.Sleep(ctx, time.Millisecond); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = wf.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
 
-		wf.Sleep(ctx, time.Millisecond)
+		if err := wf.Sleep(ctx, time.Millisecond); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = wf.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
@@ -271,7 +290,9 @@ func Test_InstanceExecutionDetails_Incremental(t *testing.T) {
 		return nil
 	}
 
-	r.RegisterWorkflow(workflowMultipleSteps)
+	if err := r.RegisterWorkflow(workflowMultipleSteps); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	// First execution - start workflow, schedule first timer
 	task1 := startWorkflowTask(i.InstanceID, workflowMultipleSteps)
@@ -327,9 +348,11 @@ func Test_InstanceExecutionDetails_WithSubworkflow(t *testing.T) {
 		info := wf.InstanceExecutionDetails(ctx)
 		lengthBeforeSub = info.HistoryLength
 
-		wf.CreateSubWorkflowInstance[any](ctx, wf.SubWorkflowOptions{
+		if _, err := wf.CreateSubWorkflowInstance[any](ctx, wf.SubWorkflowOptions{
 			InstanceID: "subworkflow",
-		}, subworkflow).Get(ctx)
+		}, subworkflow).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = wf.InstanceExecutionDetails(ctx)
 		lengthAfterSub = info.HistoryLength
@@ -337,8 +360,12 @@ func Test_InstanceExecutionDetails_WithSubworkflow(t *testing.T) {
 		return nil
 	}
 
-	r.RegisterWorkflow(workflow)
-	r.RegisterWorkflow(subworkflow)
+	if err := r.RegisterWorkflow(workflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
+	if err := r.RegisterWorkflow(subworkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	task := startWorkflowTask(i.InstanceID, workflow)
 

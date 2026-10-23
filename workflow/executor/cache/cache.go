@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
-	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/jellydator/ttlcache/v3"
+
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
+	"github.com/psyb0t/go-workflows/workflow/executor"
 )
 
 type lruCache struct {
@@ -17,8 +18,11 @@ type lruCache struct {
 }
 
 func NewWorkflowExecutorLRUCache(mc metrics.Client, size int, expiration time.Duration) *lruCache {
+	if size < 0 {
+		size = 0
+	}
 	c := ttlcache.New(
-		ttlcache.WithCapacity[string, executor.WorkflowExecutor](uint64(size)),
+		ttlcache.WithCapacity[string, executor.WorkflowExecutor](uint64(size)), // #nosec G115 -- Negative inputs are clamped above; every nonnegative int fits uint64.
 		ttlcache.WithTTL[string, executor.WorkflowExecutor](expiration),
 	)
 

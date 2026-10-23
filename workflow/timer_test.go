@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
 )
 
 func Test_Timer_Cancellation(t *testing.T) {
@@ -25,10 +26,12 @@ func Test_Timer_Cancellation(t *testing.T) {
 
 	c := sync.NewCoroutine(ctx, func(ctx Context) error {
 		f := ScheduleTimer(ctx, time.Second*1)
-		f.Get(ctx)
+		_, err := f.Get(ctx)
+		require.NoError(t, err)
 
 		// Block workflow
-		sync.NewFuture[int]().Get(ctx)
+		_, err = sync.NewFuture[int]().Get(ctx)
+		require.NoError(t, err)
 
 		return nil
 	})
@@ -41,7 +44,9 @@ func Test_Timer_Cancellation(t *testing.T) {
 	cmd.Done()
 	fs, ok := state.FutureByScheduleEventID(1)
 	require.True(t, ok)
-	fs.Set(nil, nil)
+	if err := fs.Set(nil, nil); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	c.Execute()
 	require.False(t, c.Finished())

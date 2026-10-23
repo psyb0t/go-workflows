@@ -3,7 +3,7 @@ package cache
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func getKey(instance *core.WorkflowInstance) string {

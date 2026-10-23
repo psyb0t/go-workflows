@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/core"
-	log "github.com/cschleiden/go-workflows/internal/log"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/core"
+	log "github.com/psyb0t/go-workflows/internal/log"
 )
 
 func Test_ReplayLogger_With(t *testing.T) {

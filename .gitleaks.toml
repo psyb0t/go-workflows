@@ -1,0 +1,22 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local tooling state and audit fixtures"
+paths = ['''(^|/)(node_modules|\.pnpm-store|\.git|\.cache|\.research_files|\.testing|\.refactor|\.anustimes|\.brutal_reviews)(/|$)''']
+
+[[allowlists]]
+description = "Minified third-party browser bundles; their first-party source is scanned separately"
+paths = ['''^diag/app/build/(static/js|assets)/.*\.js$''']
+
+[[allowlists]]
+description = "Scanner output contains rule examples, not repository credentials"
+paths = ['''(^|/)sec\.sarif$''']
+
+[[allowlists]]
+description = "SQLite Windows generated type alias, not a credential"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)vendor/modernc\.org/sqlite/lib/sqlite_windows_(amd64|arm64)\.go$''']
+regexTarget = "match"
+regexes = ['''^BCRYPT_DSA_KEY_BLOB_V2 = _BCRYPT_DSA_KEY_BLOB_V2$''']

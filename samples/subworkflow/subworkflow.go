@@ -3,16 +3,18 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -56,11 +58,19 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(ParentWorkflow)
-	w.RegisterWorkflow(SubWorkflow)
+	if err := w.RegisterWorkflow(ParentWorkflow); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
-	w.RegisterActivity(Activity2)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -78,7 +88,7 @@ func ParentWorkflow(ctx workflow.Context, msg string) error {
 
 	result, err := wr.Get(ctx)
 	if err != nil && !errors.Is(err, workflow.Canceled) {
-		return fmt.Errorf("getting sub workflow result: %w", err)
+		return ctxerrors.Wrap(err, "getting sub workflow result")
 	}
 
 	logger.Debug("Sub workflow result:", "result", result)

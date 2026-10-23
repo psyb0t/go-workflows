@@ -137,7 +137,7 @@ type Event struct {
 }
 
 func (e Event) String() string {
-	return strconv.Itoa(int(e.Type))
+	return strconv.FormatUint(uint64(e.Type), 10)
 }
 
 type HistoryEventOption func(e *Event)

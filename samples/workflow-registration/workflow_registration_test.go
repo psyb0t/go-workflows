@@ -4,15 +4,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/tester"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/tester"
 )
 
 func Test_Workflow(t *testing.T) {
 	tester := tester.NewWorkflowTester[int](Workflow1)
 
-	tester.OnSubWorkflowByName("SubWorkflowName", mock.Anything, "Hello world").Return(42, nil)
+	tester.OnSubWorkflowByName("SubWorkflowName", SubWorkflow1, mock.Anything, "Hello world").Return(42, nil)
 
 	tester.OnActivity(Activity1, mock.Anything, 35, 12).Return(47, nil)
 

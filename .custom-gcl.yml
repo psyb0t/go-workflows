@@ -1,5 +1,5 @@
-version:  v2.0.2
+version: v2.8.0
 destination: .
 plugins:
-- module: 'github.com/cschleiden/go-workflows/analyzer'
+- module: 'github.com/psyb0t/go-workflows/analyzer'
   path: ./analyzer

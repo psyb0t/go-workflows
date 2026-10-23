@@ -5,11 +5,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 
 	"github.com/google/uuid"
 )
@@ -26,8 +28,12 @@ func main() {
 	)
 
 	// Register workflows and activities explicitly
-	orchestrator.RegisterWorkflow(SimpleWorkflow)
-	orchestrator.RegisterActivity(ProcessMessage)
+	if err := orchestrator.RegisterWorkflow(SimpleWorkflow); err != nil {
+		panic(err)
+	}
+	if err := orchestrator.RegisterActivity(ProcessMessage); err != nil {
+		panic(err)
+	}
 
 	if err := orchestrator.Start(ctx); err != nil {
 		panic("could not start orchestrator: " + err.Error())
@@ -66,7 +72,7 @@ func SimpleWorkflow(ctx workflow.Context, message string) (string, error) {
 
 	result, err := f.Get(ctx)
 	if err != nil {
-		return "", err
+		return "", ctxerrors.Wrap(err, "execute main")
 	}
 
 	return result, nil

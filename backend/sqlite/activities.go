@@ -3,10 +3,11 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func scheduleActivity(ctx context.Context, tx *sql.Tx, queue workflow.Queue, instance *workflow.Instance, event *history.Event) error {
@@ -25,7 +26,7 @@ func scheduleActivity(ctx context.Context, tx *sql.Tx, queue workflow.Queue, ins
 		event.ScheduleEventID,
 		event.VisibleAt,
 	); err != nil {
-		return fmt.Errorf("inserting events: %w", err)
+		return ctxerrors.Wrap(err, "inserting events")
 	}
 
 	return nil

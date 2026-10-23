@@ -4,12 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 var e2eDiagTests = []backendTest{

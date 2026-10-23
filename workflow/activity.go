@@ -3,13 +3,15 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/core"
+	a "github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/command"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
 )
 
 type ActivityOptions struct {
@@ -64,7 +66,7 @@ func executeActivity[TResult any](ctx Context, options ActivityOptions, attempt 
 	cv := contextvalue.Converter(ctx)
 	inputs, err := a.ArgsToInputs(cv, args...)
 	if err != nil {
-		f.Set(*new(TResult), fmt.Errorf("converting activity input: %w", err))
+		f.Set(*new(TResult), ctxerrors.Wrap(err, "converting activity input"))
 		return f
 	}
 
@@ -75,7 +77,7 @@ func executeActivity[TResult any](ctx Context, options ActivityOptions, attempt 
 	propagators := propagators(ctx)
 	metadata := &Metadata{}
 	if err := injectFromWorkflow(ctx, metadata, propagators); err != nil {
-		f.Set(*new(TResult), fmt.Errorf("injecting workflow context: %w", err))
+		f.Set(*new(TResult), ctxerrors.Wrap(err, "injecting workflow context"))
 		return f
 	}
 

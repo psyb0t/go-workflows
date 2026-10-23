@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_SpanFromContext(t *testing.T) {

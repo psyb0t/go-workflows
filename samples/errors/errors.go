@@ -3,19 +3,22 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -31,7 +34,12 @@ func main() {
 	// Start diagnostic server under /diag
 	m := http.NewServeMux()
 	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(db)))
-	go http.ListenAndServe(":3000", m)
+	server := &http.Server{Addr: "127.0.0.1:3000", Handler: m, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("diagnostics server failed", "err", err)
+		}
+	}()
 
 	// Run worker
 	go RunWorker(ctx, b)
@@ -58,13 +66,25 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(SubWorkflow)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(GenericErrorActivity)
-	w.RegisterActivity(PanicActivity)
-	w.RegisterActivity(CustomErrorActivity)
-	w.RegisterActivity(WrappedErrorActivity)
+	if err := w.RegisterActivity(GenericErrorActivity); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(PanicActivity); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(CustomErrorActivity); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(WrappedErrorActivity); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -138,7 +158,7 @@ func handleError(ctx workflow.Context, name string, logger *slog.Logger, err err
 }
 
 func GenericErrorActivity(ctx context.Context) (int, error) {
-	return 0, errors.New("some activity error")
+	return 0, ctxerrors.New("some activity error")
 }
 
 type CustomError struct {
@@ -165,7 +185,7 @@ func someFunc() int {
 }
 
 func WrappedErrorActivity(ctx context.Context) (int, error) {
-	return 0, fmt.Errorf("wrapped error: %w", errors.New("inner error"))
+	return 0, ctxerrors.Wrap(ctxerrors.New("inner error"), "wrapped error")
 }
 
 func SubWorkflow(ctx workflow.Context) (int, error) {

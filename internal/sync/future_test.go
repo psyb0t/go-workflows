@@ -11,7 +11,8 @@ func Test_FutureYields(t *testing.T) {
 	f := NewFuture[int]()
 
 	c := NewCoroutine(Background(), func(ctx Context) error {
-		f.Get(ctx)
+		_, err := f.Get(ctx)
+		require.NoError(t, err)
 
 		return nil
 	})
@@ -59,7 +60,8 @@ func Test_FutureGetNil(t *testing.T) {
 	f := NewFuture[int]()
 
 	c := NewCoroutine(ctx, func(ctx Context) error {
-		f.Get(ctx)
+		_, err := f.Get(ctx)
+		require.NoError(t, err)
 
 		return nil
 	})
@@ -77,7 +79,8 @@ func Test_FutureSetNil(t *testing.T) {
 	f := NewFuture[int]()
 
 	c := NewCoroutine(ctx, func(ctx Context) error {
-		f.Get(ctx)
+		_, err := f.Get(ctx)
+		require.NoError(t, err)
 
 		return nil
 	})

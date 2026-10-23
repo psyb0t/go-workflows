@@ -3,15 +3,16 @@ package worker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"slices"
 	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type TaskWorker[Task, Result any] interface {
@@ -72,7 +73,7 @@ func NewWorker[Task, TaskResult any](
 
 func (w *Worker[Task, TaskResult]) Start(ctx context.Context) error {
 	if err := w.tw.Start(ctx, w.options.Queues); err != nil {
-		return fmt.Errorf("starting task worker: %w", err)
+		return ctxerrors.Wrap(err, "starting task worker")
 	}
 
 	w.pollersWg.Add(w.options.Pollers)
@@ -192,10 +193,13 @@ func (w *Worker[Task, TaskResult]) handle(ctx context.Context, t *Task) error {
 	if err != nil {
 		// If execution was canceled (e.g., because heartbeat extend failed), abort without completing.
 		if errors.Is(err, context.Canceled) {
-			return err
+			if err != nil {
+				return ctxerrors.Wrap(err, "execute worker")
+			}
+			return nil
 		}
 
-		return fmt.Errorf("executing task: %w", err)
+		return ctxerrors.Wrap(err, "executing task")
 	}
 
 	return w.tw.Complete(ctx, result, t)
@@ -240,7 +244,11 @@ func (w *Worker[Task, TaskResult]) poll(ctx context.Context, timeout time.Durati
 			return nil, nil
 		}
 
-		return nil, err
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "execute worker")
+		}
+
+		return nil, nil
 	}
 
 	return task, nil

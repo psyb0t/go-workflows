@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_InstanceExecutionDetails_HistoryLength(t *testing.T) {
@@ -43,7 +44,9 @@ func Test_InstanceExecutionDetails_HistoryLength_WithActivity(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[int](workflowWithActivity)
-	tester.Registry().RegisterActivity(activity1)
+	if err := tester.Registry().RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 
@@ -63,12 +66,16 @@ func Test_InstanceExecutionDetails_HistoryLength_MultipleSteps(t *testing.T) {
 		info := workflow.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
 
-		workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx)
+		if _, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = workflow.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
 
-		workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx)
+		if _, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		info = workflow.InstanceExecutionDetails(ctx)
 		lengths = append(lengths, info.HistoryLength)
@@ -77,7 +84,9 @@ func Test_InstanceExecutionDetails_HistoryLength_MultipleSteps(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[any](workflowMultipleSteps)
-	tester.Registry().RegisterActivity(activity1)
+	if err := tester.Registry().RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 

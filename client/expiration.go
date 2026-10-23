@@ -3,11 +3,12 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/internal/workflows"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/internal/workflows"
 )
 
 const expirationWorkflowInstanceID = "expiration"
@@ -27,13 +28,13 @@ func (c *Client) StartAutoExpiration(ctx context.Context, delay time.Duration) e
 		if errors.Is(err, backend.ErrInstanceAlreadyExists) {
 			err = c.SignalWorkflow(ctx, expirationWorkflowInstanceID, workflows.UpdateExpirationSignal, delay)
 			if err != nil {
-				return fmt.Errorf("updating expiration workflow: %w", err)
+				return ctxerrors.Wrap(err, "updating expiration workflow")
 			}
 
 			return nil
 		}
 
-		return fmt.Errorf("starting expiration workflow: %w", err)
+		return ctxerrors.Wrap(err, "starting expiration workflow")
 	}
 
 	return nil

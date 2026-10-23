@@ -338,8 +338,8 @@ func (c *cancelCtx) Done() Channel[struct{}] {
 }
 
 func (c *cancelCtx) Err() error {
-	err := c.err
-	return err
+	// Context.Err must return the stable cancellation sentinel on every call.
+	return c.err
 }
 
 // cancel closes c.done, cancels each of c's children, and, if

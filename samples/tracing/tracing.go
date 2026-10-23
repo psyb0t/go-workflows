@@ -5,23 +5,24 @@ import (
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/workflow/executor"
+
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/worker"
 
 	"github.com/google/uuid"
 )
@@ -78,7 +79,9 @@ func main() {
 		panic("could not stop worker" + err.Error())
 	}
 
-	tp.Shutdown(context.Background())
+	if err := tp.Shutdown(context.Background()); err != nil {
+		panic(err)
+	}
 }
 
 func runWorkflow(ctx context.Context, c *client.Client) {
@@ -95,7 +98,9 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 
 	// Test signal
 	time.Sleep(time.Second * 5)
-	c.SignalWorkflow(ctx, wf.InstanceID, "test-signal", "")
+	if err := c.SignalWorkflow(ctx, wf.InstanceID, "test-signal", ""); err != nil {
+		panic(err)
+	}
 
 	result, err := client.GetWorkflowResult[int](ctx, c, wf, time.Second*120)
 	if err != nil {
@@ -106,8 +111,7 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 }
 
 // Ensure we aren't caching for this sample
-type noopWorkflowExecutorCache struct {
-}
+type noopWorkflowExecutorCache struct{}
 
 var _ executor.Cache = (*noopWorkflowExecutorCache)(nil)
 
@@ -135,11 +139,19 @@ func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	opt.WorkflowExecutorCache = &noopWorkflowExecutorCache{}
 	w := worker.New(mb, &opt)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(Subworkflow)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(Subworkflow); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
-	w.RegisterActivity(RetriedActivity)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(RetriedActivity); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/internal/log"
+	"github.com/psyb0t/ctxerrors"
+
 	redis "github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/internal/log"
 )
 
 var _ diag.Backend = (*redisBackend)(nil)
@@ -20,7 +23,7 @@ func (rb *redisBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 		afterSegmentID := instanceSegment(core.NewWorkflowInstance(afterInstanceID, afterExecutionID))
 		scores, err := rb.rdb.ZMScore(ctx, rb.keys.instancesByCreation(), afterSegmentID).Result()
 		if err != nil {
-			return nil, fmt.Errorf("getting instance score for %v: %w", afterSegmentID, err)
+			return nil, ctxerrors.Wrapf(err, "getting instance score for %v", afterSegmentID)
 		}
 
 		if len(scores) == 0 {
@@ -43,7 +46,7 @@ func (rb *redisBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 		Count:   int64(count),
 	}).Result()
 	if err != nil {
-		return nil, fmt.Errorf("getting instances after %v: %w", stop, err)
+		return nil, ctxerrors.Wrapf(err, "getting instances after %v", stop)
 	}
 
 	instanceKeys := make([]string, 0)
@@ -58,7 +61,7 @@ func (rb *redisBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 
 	instances, err := rb.rdb.MGet(ctx, instanceKeys...).Result()
 	if err != nil {
-		return nil, fmt.Errorf("getting instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting instances")
 	}
 
 	instanceRefs := make([]*diag.WorkflowInstanceRef, 0, len(instances))
@@ -70,7 +73,7 @@ func (rb *redisBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 
 		var state instanceState
 		if err := json.Unmarshal([]byte(instStr), &state); err != nil {
-			return nil, fmt.Errorf("unmarshaling instance state: %w", err)
+			return nil, ctxerrors.Wrap(err, "unmarshaling instance state")
 		}
 
 		instanceRefs = append(instanceRefs, &diag.WorkflowInstanceRef{
@@ -88,7 +91,7 @@ func (rb *redisBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 func (rb *redisBackend) GetWorkflowInstance(ctx context.Context, instance *core.WorkflowInstance) (*diag.WorkflowInstanceRef, error) {
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(instance))
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
 
 	return mapWorkflowInstance(instanceState), nil

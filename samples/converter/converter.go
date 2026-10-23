@@ -9,18 +9,19 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
 
 	"github.com/google/uuid"
 )
 
-type CustomConverter struct {
-}
+type CustomConverter struct{}
 
 var _ converter.Converter = (*CustomConverter)(nil)
 
@@ -32,7 +33,7 @@ func (*CustomConverter) To(v interface{}) (payload.Payload, error) {
 	var buf bytes.Buffer
 
 	if err := gob.NewEncoder(&buf).Encode(v); err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute converter")
 	}
 
 	return buf.Bytes(), nil
@@ -86,10 +87,16 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
-	w.RegisterActivity(Activity2)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

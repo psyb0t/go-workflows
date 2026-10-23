@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 //go:embed app/build

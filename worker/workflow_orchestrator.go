@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 // WorkflowOrchestrator combines a worker and client into a single entity.

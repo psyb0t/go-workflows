@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Inputs struct {
@@ -33,9 +33,11 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 	logger.Info("R2 result", "r2", r2)
 
 	// Queue sub workflow to separate queue
-	workflow.CreateSubWorkflowInstance[any](ctx, workflow.SubWorkflowOptions{
+	if _, err := workflow.CreateSubWorkflowInstance[any](ctx, workflow.SubWorkflowOptions{
 		Queue: CustomWorkflowQueue,
-	}, SubWorkflow).Get(ctx)
+	}, SubWorkflow).Get(ctx); err != nil {
+		panic(err)
+	}
 
 	return r1 + r2, nil
 }

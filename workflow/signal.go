@@ -1,12 +1,13 @@
 package workflow
 
 import (
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/signals"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/signals"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
 )
 
 // NewSignalChannel returns a new signal channel.

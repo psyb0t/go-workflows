@@ -11,28 +11,35 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/monoprocess"
-	"github.com/cschleiden/go-workflows/backend/mysql"
-	"github.com/cschleiden/go-workflows/backend/postgres"
-	"github.com/cschleiden/go-workflows/backend/redis"
-	"github.com/cschleiden/go-workflows/backend/sqlite"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
 	redisv8 "github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/monoprocess"
+	"github.com/psyb0t/go-workflows/backend/mysql"
+	"github.com/psyb0t/go-workflows/backend/postgres"
+	"github.com/psyb0t/go-workflows/backend/redis"
+	"github.com/psyb0t/go-workflows/backend/sqlite"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/worker"
 )
 
-var b = flag.String("backend", "redis", "Backend to use. Supported backends are:\n- redis\n- mysql\n- sqlite\n- postgres\n")
-var timeout = flag.Duration("timeout", time.Second*30, "Timeout for the benchmark run")
-var scenario = flag.String("scenario", "basic", "Scenario to run. Support scenarios are:\n- basic\n")
-var runs = flag.Int("runs", 1, "Number of root workflows to start")
-var depth = flag.Int("depth", 2, "Depth of mid workflows")
-var fanOut = flag.Int("fanout", 2, "Number of child workflows to execute per root/mid workflow")
-var leafFanOut = flag.Int("leaffanout", 2, "Number of leaf workflows to execute per mid workflow")
-var activities = flag.Int("activities", 2, "Number of activities to execute per leaf workflow")
-var resultSize = flag.Int("resultsize", 100, "Size of activity result payload in bytes")
-var format = flag.String("format", "text", "Output format. Supported formats are:\n- text\n- csv\n")
-var cacheSize = flag.Int("cachesize", 128, "Size of the workflow executor cache")
+var (
+	b          = flag.String("backend", "redis", "Backend to use. Supported backends are:\n- redis\n- mysql\n- sqlite\n- postgres\n")
+	timeout    = flag.Duration("timeout", time.Second*30, "Timeout for the benchmark run")
+	scenario   = flag.String("scenario", "basic", "Scenario to run. Support scenarios are:\n- basic\n")
+	runs       = flag.Int("runs", 1, "Number of root workflows to start")
+	depth      = flag.Int("depth", 2, "Depth of mid workflows")
+	fanOut     = flag.Int("fanout", 2, "Number of child workflows to execute per root/mid workflow")
+	leafFanOut = flag.Int("leaffanout", 2, "Number of leaf workflows to execute per mid workflow")
+	activities = flag.Int("activities", 2, "Number of activities to execute per leaf workflow")
+	resultSize = flag.Int("resultsize", 100, "Size of activity result payload in bytes")
+	format     = flag.String("format", "text", "Output format. Supported formats are:\n- text\n- csv\n")
+	cacheSize  = flag.Int("cachesize", 128, "Size of the workflow executor cache")
+)
 
 func main() {
 	flag.Parse()
@@ -45,7 +52,7 @@ func main() {
 		backend.WithLogger(slog.New(&nullHandler{})),
 		backend.WithMetrics(mm),
 	)
-	defer ba.Close()
+	defer cleanup.Close(ctx, ba)
 
 	wo := worker.DefaultOptions
 	wo.WorkflowExecutorCacheSize = *cacheSize
@@ -57,10 +64,18 @@ func main() {
 
 	w := worker.New(ba, &wo)
 
-	w.RegisterWorkflow(Root)
-	w.RegisterWorkflow(Mid)
-	w.RegisterWorkflow(Leaf)
-	w.RegisterActivity(Activity)
+	if err := w.RegisterWorkflow(Root); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(Mid); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(Leaf); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic(err)
@@ -91,7 +106,7 @@ func main() {
 			defer wg.Done()
 			err := c.WaitForWorkflowInstance(ctx, i, *timeout)
 			if err != nil {
-				panic(fmt.Errorf("Workflow instance %s failed: %w", i.InstanceID, err))
+				panic(ctxerrors.Wrapf(err, "Workflow instance %s failed", i.InstanceID))
 			}
 		}()
 	}
@@ -118,7 +133,9 @@ func getBackend(b string, opt ...backend.BackendOption) backend.Backend {
 		return monoprocess.NewMonoprocessBackend(sqlite.NewInMemoryBackend(sqlite.WithBackendOptions(opt...)))
 
 	case "sqlite":
-		os.Remove("bench.sqlite")
+		if err := os.Remove("bench.sqlite"); err != nil {
+			panic(err)
+		}
 
 		return monoprocess.NewMonoprocessBackend(sqlite.NewSqliteBackend("bench.sqlite", sqlite.WithBackendOptions(opt...)))
 
@@ -129,11 +146,11 @@ func getBackend(b string, opt ...backend.BackendOption) backend.Backend {
 		}
 
 		if _, err := db.Exec("DROP DATABASE IF EXISTS bench"); err != nil {
-			panic(fmt.Errorf("dropping database: %w", err))
+			panic(ctxerrors.Wrap(err, "dropping database"))
 		}
 
 		if _, err := db.Exec("CREATE DATABASE bench"); err != nil {
-			panic(fmt.Errorf("creating database: %w", err))
+			panic(ctxerrors.Wrap(err, "creating database"))
 		}
 
 		if err := db.Close(); err != nil {
@@ -153,11 +170,11 @@ func getBackend(b string, opt ...backend.BackendOption) backend.Backend {
 			panic(err)
 		}
 		if _, err := db.Exec("DROP DATABASE IF EXISTS bench"); err != nil {
-			panic(fmt.Errorf("dropping database: %w", err))
+			panic(ctxerrors.Wrap(err, "dropping database"))
 		}
 
 		if _, err := db.Exec("CREATE DATABASE bench"); err != nil {
-			panic(fmt.Errorf("creating database: %w", err))
+			panic(ctxerrors.Wrap(err, "creating database"))
 		}
 
 		if err := db.Close(); err != nil {

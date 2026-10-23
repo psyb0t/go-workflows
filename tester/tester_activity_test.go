@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_Activity_Long(t *testing.T) {
@@ -114,14 +115,18 @@ func Test_Activity_WithLogger(t *testing.T) {
 	}
 
 	wf := func(ctx workflow.Context) error {
-		workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx)
+		if _, err := workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		return nil
 	}
 
 	tester := NewWorkflowTester[string](wf, WithTestTimeout(time.Second*3))
 
-	tester.Registry().RegisterActivity(activity1)
+	if err := tester.Registry().RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 
@@ -140,7 +145,9 @@ func Test_Activity_Panic(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](wf, WithTestTimeout(time.Second*3))
-	tester.Registry().RegisterActivity(activity1)
+	if err := tester.Registry().RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 	tester.Execute(context.Background())
 
 	require.True(t, tester.WorkflowFinished())

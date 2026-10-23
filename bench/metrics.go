@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/backend/metrics"
 )
 
 type store struct {

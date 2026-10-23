@@ -2,11 +2,12 @@ package redis
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func (rb *redisBackend) PrepareActivityQueues(ctx context.Context, queues []workflow.Queue) error {
@@ -16,7 +17,7 @@ func (rb *redisBackend) PrepareActivityQueues(ctx context.Context, queues []work
 func (rb *redisBackend) GetActivityTask(ctx context.Context, queues []workflow.Queue) (*backend.ActivityTask, error) {
 	activityTask, err := rb.activityQueue.Dequeue(ctx, rb.rdb, queues, rb.options.ActivityLockTimeout, rb.options.BlockTimeout)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute activity")
 	}
 
 	if activityTask == nil {
@@ -36,23 +37,26 @@ func (rb *redisBackend) ExtendActivityTask(ctx context.Context, task *backend.Ac
 	p := rb.rdb.Pipeline()
 
 	if err := rb.activityQueue.Extend(ctx, p, task.Queue, task.ID); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute activity")
 	}
 
 	_, err := p.Exec(ctx)
-	return err
+	if err != nil {
+		return ctxerrors.Wrap(err, "execute activity")
+	}
+	return nil
 }
 
 func (rb *redisBackend) CompleteActivityTask(ctx context.Context, task *backend.ActivityTask, result *history.Event) error {
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(task.WorkflowInstance))
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute activity")
 	}
 
 	// Marshal event data
 	eventData, payload, err := marshalEvent(result)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute activity")
 	}
 
 	activityQueueKeys := rb.activityQueue.Keys(task.Queue)
@@ -77,7 +81,7 @@ func (rb *redisBackend) CompleteActivityTask(ctx context.Context, task *backend.
 		instanceSegment(task.WorkflowInstance),
 	).Err()
 	if err != nil {
-		return fmt.Errorf("completing activity task: %w", err)
+		return ctxerrors.Wrap(err, "completing activity task")
 	}
 
 	return nil

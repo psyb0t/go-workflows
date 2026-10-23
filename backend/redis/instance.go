@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func (rb *redisBackend) CreateWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error {
@@ -26,17 +29,17 @@ func (rb *redisBackend) CreateWorkflowInstance(ctx context.Context, instance *wo
 		CreatedAt: time.Now(),
 	})
 	if err != nil {
-		return fmt.Errorf("marshaling instance state: %w", err)
+		return ctxerrors.Wrap(err, "marshaling instance state")
 	}
 
 	activeInstance, err := json.Marshal(instance)
 	if err != nil {
-		return fmt.Errorf("marshaling instance: %w", err)
+		return ctxerrors.Wrap(err, "marshaling instance")
 	}
 
 	eventData, payloadData, err := marshalEvent(event)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute instance")
 	}
 
 	keyInfo := rb.workflowQueue.Keys(a.Queue)
@@ -67,7 +70,7 @@ func (rb *redisBackend) CreateWorkflowInstance(ctx context.Context, instance *wo
 			}
 		}
 
-		return fmt.Errorf("creating workflow instance: %w", err)
+		return ctxerrors.Wrap(err, "creating workflow instance")
 	}
 
 	return nil
@@ -82,7 +85,7 @@ func (rb *redisBackend) GetWorkflowInstanceHistory(ctx context.Context, instance
 
 	msgs, err := rb.rdb.XRange(ctx, rb.keys.historyKey(instance), start, "+").Result()
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute instance")
 	}
 
 	payloadKeys := make([]string, 0, len(msgs))
@@ -90,7 +93,7 @@ func (rb *redisBackend) GetWorkflowInstanceHistory(ctx context.Context, instance
 	for _, msg := range msgs {
 		var event *history.Event
 		if err := json.Unmarshal([]byte(msg.Values["event"].(string)), &event); err != nil {
-			return nil, fmt.Errorf("unmarshaling event: %w", err)
+			return nil, ctxerrors.Wrap(err, "unmarshaling event")
 		}
 
 		payloadKeys = append(payloadKeys, event.ID)
@@ -100,13 +103,13 @@ func (rb *redisBackend) GetWorkflowInstanceHistory(ctx context.Context, instance
 	if len(payloadKeys) > 0 {
 		res, err := rb.rdb.HMGet(ctx, rb.keys.payloadKey(instance), payloadKeys...).Result()
 		if err != nil {
-			return nil, fmt.Errorf("reading payloads: %w", err)
+			return nil, ctxerrors.Wrap(err, "reading payloads")
 		}
 
 		for i, event := range events {
 			event.Attributes, err = history.DeserializeAttributes(event.Type, []byte(res[i].(string)))
 			if err != nil {
-				return nil, fmt.Errorf("deserializing attributes for event %v: %w", event.Type, err)
+				return nil, ctxerrors.Wrapf(err, "deserializing attributes for event %v", event.Type)
 			}
 		}
 	}
@@ -117,7 +120,7 @@ func (rb *redisBackend) GetWorkflowInstanceHistory(ctx context.Context, instance
 func (rb *redisBackend) GetWorkflowInstanceState(ctx context.Context, instance *core.WorkflowInstance) (core.WorkflowInstanceState, error) {
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(instance))
 	if err != nil {
-		return core.WorkflowInstanceStateActive, err
+		return core.WorkflowInstanceStateActive, ctxerrors.Wrap(err, "execute instance")
 	}
 
 	return instanceState.State, nil
@@ -127,13 +130,13 @@ func (rb *redisBackend) CancelWorkflowInstance(ctx context.Context, instance *co
 	// Read the instance to check if it exists
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(instance))
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute instance")
 	}
 
 	// Prepare event data
 	eventData, payloadData, err := marshalEvent(event)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute instance")
 	}
 
 	keyInfo := rb.workflowQueue.Keys(workflow.Queue(instanceState.Queue))
@@ -150,7 +153,7 @@ func (rb *redisBackend) CancelWorkflowInstance(ctx context.Context, instance *co
 		payloadData,
 		instanceSegment(instance),
 	).Err(); err != nil {
-		return fmt.Errorf("canceling workflow instance: %w", err)
+		return ctxerrors.Wrap(err, "canceling workflow instance")
 	}
 
 	return nil
@@ -159,7 +162,7 @@ func (rb *redisBackend) CancelWorkflowInstance(ctx context.Context, instance *co
 func (rb *redisBackend) RemoveWorkflowInstance(ctx context.Context, instance *core.WorkflowInstance) error {
 	i, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(instance))
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute instance")
 	}
 
 	if i.State != core.WorkflowInstanceStateFinished && i.State != core.WorkflowInstanceStateContinuedAsNew {
@@ -211,12 +214,12 @@ func readInstancePipelineCmd(cmd *redis.StringCmd) (*instanceState, error) {
 			return nil, backend.ErrInstanceNotFound
 		}
 
-		return nil, fmt.Errorf("reading instance: %w", err)
+		return nil, ctxerrors.Wrap(err, "reading instance")
 	}
 
 	var state instanceState
 	if err := json.Unmarshal([]byte(val), &state); err != nil {
-		return nil, fmt.Errorf("unmarshaling instance state: %w", err)
+		return nil, ctxerrors.Wrap(err, "unmarshaling instance state")
 	}
 
 	return &state, nil
@@ -229,12 +232,16 @@ func (rb *redisBackend) readActiveInstanceExecution(ctx context.Context, instanc
 			return nil, nil
 		}
 
-		return nil, err
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "execute instance")
+		}
+
+		return nil, nil
 	}
 
 	var instance *core.WorkflowInstance
 	if err := json.Unmarshal([]byte(val), &instance); err != nil {
-		return nil, fmt.Errorf("unmarshaling instance: %w", err)
+		return nil, ctxerrors.Wrap(err, "unmarshaling instance")
 	}
 
 	return instance, nil

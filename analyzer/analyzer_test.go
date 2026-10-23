@@ -38,6 +38,6 @@ func TestComplex(t *testing.T) {
 	result := analysistest.Run(t, analysistest.TestData(), analyzers[0], "q")
 	for _, r := range result {
 		require.NoError(t, r.Err)
-		require.Equal(t, 1, len(r.Diagnostics))
+		require.Len(t, r.Diagnostics, 1)
 	}
 }

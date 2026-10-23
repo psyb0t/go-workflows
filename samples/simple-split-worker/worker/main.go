@@ -5,10 +5,10 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/samples"
-	simple_split_worker "github.com/cschleiden/go-workflows/samples/simple-split-worker"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/samples"
+	simple_split_worker "github.com/psyb0t/go-workflows/samples/simple-split-worker"
+	"github.com/psyb0t/go-workflows/worker"
 )
 
 func main() {
@@ -27,10 +27,16 @@ func main() {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(simple_split_worker.Workflow1)
+	if err := w.RegisterWorkflow(simple_split_worker.Workflow1); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(simple_split_worker.Activity1)
-	w.RegisterActivity(simple_split_worker.Activity2)
+	if err := w.RegisterActivity(simple_split_worker.Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(simple_split_worker.Activity2); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

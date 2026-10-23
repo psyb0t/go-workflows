@@ -2,9 +2,10 @@ package redis
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
 )
 
 func (rb *redisBackend) GetStats(ctx context.Context) (*backend.Stats, error) {
@@ -15,7 +16,7 @@ func (rb *redisBackend) GetStats(ctx context.Context) (*backend.Stats, error) {
 	// get workflow instances
 	activeInstances, err := rb.rdb.SCard(ctx, rb.keys.instancesActive()).Result()
 	if err != nil {
-		return nil, fmt.Errorf("getting active instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting active instances")
 	}
 
 	s.ActiveWorkflowInstances = activeInstances
@@ -23,7 +24,7 @@ func (rb *redisBackend) GetStats(ctx context.Context) (*backend.Stats, error) {
 	// get pending workflow tasks
 	pendingWorkflows, err := rb.workflowQueue.Size(ctx, rb.rdb)
 	if err != nil {
-		return nil, fmt.Errorf("getting active workflows: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting active workflows")
 	}
 
 	s.PendingWorkflowTasks = pendingWorkflows
@@ -31,7 +32,7 @@ func (rb *redisBackend) GetStats(ctx context.Context) (*backend.Stats, error) {
 	// get pending activities
 	pendingActivities, err := rb.activityQueue.Size(ctx, rb.rdb)
 	if err != nil {
-		return nil, fmt.Errorf("getting active activities: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting active activities")
 	}
 
 	s.PendingActivityTasks = pendingActivities

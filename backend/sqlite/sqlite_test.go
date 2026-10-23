@@ -1,12 +1,16 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/test"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/test"
 )
 
 func Test_SqliteBackend(t *testing.T) {
@@ -41,7 +45,7 @@ func Test_EndToEndSqliteBackend(t *testing.T) {
 func Test_SqliteBackend_WorkerName(t *testing.T) {
 	t.Run("DefaultWorkerName", func(t *testing.T) {
 		backend := NewInMemoryBackend()
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// The default worker name should be in the format "worker-<uuid>"
 		require.Contains(t, backend.workerName, "worker-")
@@ -51,14 +55,14 @@ func Test_SqliteBackend_WorkerName(t *testing.T) {
 	t.Run("CustomWorkerName", func(t *testing.T) {
 		customWorkerName := "test-worker-123"
 		backend := NewInMemoryBackend(WithBackendOptions(backend.WithWorkerName(customWorkerName)))
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		require.Equal(t, customWorkerName, backend.workerName)
 	})
 
 	t.Run("EmptyWorkerNameUsesDefault", func(t *testing.T) {
 		backend := NewInMemoryBackend(WithBackendOptions(backend.WithWorkerName("")))
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// Empty worker name should fall back to UUID generation
 		require.Contains(t, backend.workerName, "worker-")
@@ -68,7 +72,7 @@ func Test_SqliteBackend_WorkerName(t *testing.T) {
 	t.Run("CustomWorkerNameIsUsedInDatabase", func(t *testing.T) {
 		customWorkerName := "integration-test-worker"
 		backend := NewInMemoryBackend(WithBackendOptions(backend.WithWorkerName(customWorkerName)))
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// Verify the worker name is stored correctly
 		require.Equal(t, customWorkerName, backend.workerName)
@@ -80,7 +84,7 @@ func Test_SqliteBackendWithDB(t *testing.T) {
 		// Create our own database connection
 		db, err := sql.Open("sqlite", "file:testdb?mode=memory&cache=shared")
 		require.NoError(t, err)
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		// Configure connection as recommended
 		_, err = db.Exec("PRAGMA journal_mode=WAL;")
@@ -109,13 +113,13 @@ func Test_SqliteBackendWithDB(t *testing.T) {
 	t.Run("MigrationsDisabledByDefault", func(t *testing.T) {
 		db, err := sql.Open("sqlite", "file:testdb2?mode=memory&cache=shared")
 		require.NoError(t, err)
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		db.SetMaxOpenConns(1)
 
 		// Create backend without enabling migrations
 		backend := NewSqliteBackendWithDB(db)
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// Tables should not exist since migrations weren't applied
 		_, err = db.Exec("SELECT 1 FROM instances LIMIT 1")
@@ -125,7 +129,7 @@ func Test_SqliteBackendWithDB(t *testing.T) {
 	t.Run("MigrationsCanBeEnabled", func(t *testing.T) {
 		db, err := sql.Open("sqlite", "file:testdb3?mode=memory&cache=shared")
 		require.NoError(t, err)
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		_, err = db.Exec("PRAGMA journal_mode=WAL;")
 		require.NoError(t, err)
@@ -133,7 +137,7 @@ func Test_SqliteBackendWithDB(t *testing.T) {
 
 		// Create backend with migrations enabled
 		backend := NewSqliteBackendWithDB(db, WithApplyMigrations(true))
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// Tables should exist
 		_, err = db.Exec("SELECT 1 FROM instances LIMIT 1")

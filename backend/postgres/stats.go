@@ -3,12 +3,15 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error) {
@@ -18,9 +21,9 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		Isolation: sql.LevelReadCommitted,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to start transaction")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// Get active instances
 	row := tx.QueryRowContext(
@@ -28,12 +31,12 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		"SELECT COUNT(*) FROM instances i WHERE i.completed_at IS NULL",
 	)
 	if err := row.Err(); err != nil {
-		return nil, fmt.Errorf("failed to query active instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to query active instances")
 	}
 
 	var activeInstances int64
 	if err := row.Scan(&activeInstances); err != nil {
-		return nil, fmt.Errorf("failed to scan active instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to scan active instances")
 	}
 
 	s.ActiveWorkflowInstances = activeInstances
@@ -55,9 +58,9 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		now, // locked_until
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query active instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to query active instances")
 	}
-	defer workflowRows.Close()
+	defer cleanup.Close(ctx, workflowRows)
 
 	s.PendingWorkflowTasks = make(map[core.Queue]int64)
 
@@ -65,14 +68,14 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		var queue string
 		var pendingInstances int64
 		if err := workflowRows.Scan(&queue, &pendingInstances); err != nil {
-			return nil, fmt.Errorf("failed to scan active instances: %w", err)
+			return nil, ctxerrors.Wrap(err, "failed to scan active instances")
 		}
 
 		s.PendingWorkflowTasks[workflow.Queue(queue)] = pendingInstances
 	}
 
 	if err := workflowRows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read active instances: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to read active instances")
 	}
 
 	// Get pending activities
@@ -80,9 +83,9 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		ctx,
 		"SELECT queue, COUNT(*) FROM activities GROUP BY queue")
 	if err != nil {
-		return nil, fmt.Errorf("failed to query active activities: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to query active activities")
 	}
-	defer activityRows.Close()
+	defer cleanup.Close(ctx, activityRows)
 
 	s.PendingActivityTasks = make(map[core.Queue]int64)
 
@@ -90,14 +93,14 @@ func (pb *postgresBackend) GetStats(ctx context.Context) (*backend.Stats, error)
 		var queue string
 		var pendingActivities int64
 		if err := activityRows.Scan(&queue, &pendingActivities); err != nil {
-			return nil, fmt.Errorf("failed to scan active activities: %w", err)
+			return nil, ctxerrors.Wrap(err, "failed to scan active activities")
 		}
 
 		s.PendingActivityTasks[workflow.Queue(queue)] = pendingActivities
 	}
 
 	if err := activityRows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read active activities: %w", err)
+		return nil, ctxerrors.Wrap(err, "failed to read active activities")
 	}
 
 	return s, nil

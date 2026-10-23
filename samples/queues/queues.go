@@ -9,12 +9,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 
 	"github.com/google/uuid"
 )
@@ -37,8 +37,9 @@ func main() {
 	// Start diagnostic server under /diag
 	m := http.NewServeMux()
 	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(db)))
+	server := &http.Server{Addr: "127.0.0.1:3000", Handler: m, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
-		if err := http.ListenAndServe(":3000", m); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			panic(err)
 		}
 	}()
@@ -46,13 +47,21 @@ func main() {
 	// Run worker
 	w := RunDefaultWorker(ctx, b)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(SubWorkflow)
-	w.RegisterActivity(Activity1)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
 
 	// This worker won't actually execute Activity2, but it still needs to be aware of its signature
 	// since the workflow processed by this worker will schedule it.
-	w.RegisterActivity(Activity2)
+	if err := w.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
 	activityWorker := worker.NewActivityWorker(b, &worker.ActivityWorkerOptions{
 		ActivityPollers:          1,
@@ -60,9 +69,13 @@ func main() {
 		ActivityQueues:           []workflow.Queue{CustomActivityQueue},
 	})
 
-	activityWorker.RegisterActivity(Activity2)
+	if err := activityWorker.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
-	activityWorker.Start(ctx)
+	if err := activityWorker.Start(ctx); err != nil {
+		panic(err)
+	}
 
 	workflowWorker := worker.NewWorkflowWorker(b, &worker.WorkflowWorkerOptions{
 		WorkflowPollers:          1,
@@ -70,10 +83,16 @@ func main() {
 		WorkflowQueues:           []workflow.Queue{CustomWorkflowQueue},
 	})
 
-	workflowWorker.RegisterWorkflow(SubWorkflow)
-	workflowWorker.RegisterActivity(Activity2)
+	if err := workflowWorker.RegisterWorkflow(SubWorkflow); err != nil {
+		panic(err)
+	}
+	if err := workflowWorker.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
-	workflowWorker.Start(ctx)
+	if err := workflowWorker.Start(ctx); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -122,9 +141,13 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 func RunDefaultWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

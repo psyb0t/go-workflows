@@ -2,14 +2,12 @@ package workflowerrors
 
 import (
 	"bytes"
+	"fmt"
 	"runtime"
-
-	goerrors "github.com/go-errors/errors"
 )
 
 const MaxStackDepth = 50
 
-// stack returns a stacktrace formatted via go-errors/errors
 func stack(skip int) string {
 	// get stack
 	stack := make([]uintptr, MaxStackDepth)
@@ -18,16 +16,14 @@ func stack(skip int) string {
 	// trim
 	stack = stack[:length]
 
-	frames := make([]goerrors.StackFrame, len(stack))
-	for i, pc := range stack {
-		frames[i] = goerrors.NewStackFrame(pc)
-	}
-
-	// Convert frames to trace
 	buf := bytes.Buffer{}
-
-	for _, frame := range frames {
-		buf.WriteString(frame.String())
+	frames := runtime.CallersFrames(stack)
+	for {
+		frame, more := frames.Next()
+		fmt.Fprintf(&buf, "%s\n\t%s:%d\n", frame.Function, frame.File, frame.Line)
+		if !more {
+			break
+		}
 	}
 
 	return buf.String()

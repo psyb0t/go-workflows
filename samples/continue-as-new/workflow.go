@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Inputs struct {
@@ -21,7 +22,7 @@ func Workflow1(ctx workflow.Context, start, times int, inputs Inputs) (int, erro
 	for i := start; i < times; i++ {
 		r, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 7).Get(ctx)
 		if err != nil {
-			return 0, fmt.Errorf("error getting activity 1 result: %w", err)
+			return 0, ctxerrors.Wrap(err, "error getting activity 1 result")
 		}
 		logger.Debug("Activity result", "r", r)
 
@@ -29,7 +30,7 @@ func Workflow1(ctx workflow.Context, start, times int, inputs Inputs) (int, erro
 
 		_, err = workflow.CreateSubWorkflowInstance[int](ctx, workflow.DefaultSubWorkflowOptions, SubWorkflow, 1, 5).Get(ctx)
 		if err != nil {
-			return 0, fmt.Errorf("error getting sub workflow result: %w", err)
+			return 0, ctxerrors.Wrap(err, "error getting sub workflow result")
 		}
 
 		if i < 3 {

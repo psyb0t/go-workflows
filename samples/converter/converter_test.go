@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/tester"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/tester"
 )
 
 func Test_Workflow(t *testing.T) {

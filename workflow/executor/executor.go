@@ -10,25 +10,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/continueasnew"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/command"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/continueasnew"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
+	"github.com/psyb0t/go-workflows/registry"
+	wf "github.com/psyb0t/go-workflows/workflow"
 )
 
 type ExecutionResult struct {
@@ -105,7 +109,7 @@ func NewExecutor(
 		var err error
 		wfCtx, err = propagator.ExtractToWorkflow(wfCtx, metadata)
 		if err != nil {
-			return nil, fmt.Errorf("extracting context: %w", err)
+			return nil, ctxerrors.Wrap(err, "extracting context")
 		}
 	}
 
@@ -149,11 +153,12 @@ func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*E
 
 	skipNewEvents, err := e.catchupOnHistory(ctx, t, logger)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute executor")
 	}
 
 	// Always add a WorkflowTaskStarted event before executing new tasks
-	toExecute := []*history.Event{e.createNewEvent(history.EventType_WorkflowTaskStarted, &history.WorkflowTaskStartedAttributes{})}
+	toExecute := make([]*history.Event, 0, 1+len(t.NewEvents))
+	toExecute = append(toExecute, e.createNewEvent(history.EventType_WorkflowTaskStarted, &history.WorkflowTaskStartedAttributes{}))
 	executedEvents := toExecute
 
 	toExecute = append(toExecute, t.NewEvents...)
@@ -172,7 +177,7 @@ func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*E
 
 	// Enforce max history size limit
 	if e.lastSequenceID+int64(len(executedEvents)) >= e.maxHistorySize {
-		e.workflowCompleted(nil, fmt.Errorf("workflow history size exceeded %d events", e.maxHistorySize))
+		e.workflowCompleted(nil, ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow history size exceeded %d events", e.maxHistorySize))
 	}
 
 	// Process any commands added while executing new events
@@ -228,7 +233,7 @@ func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*E
 
 func (e *executor) catchupOnHistory(ctx context.Context, t *backend.WorkflowTask, logger *slog.Logger) (bool, error) {
 	if t.LastSequenceID < e.lastSequenceID {
-		return false, fmt.Errorf("task has older history than current state, cannot execute")
+		return false, ctxerrors.Wrapf(commerr.ErrInvalidState, "task has older history than current state, cannot execute")
 	}
 
 	if t.LastSequenceID > e.lastSequenceID {
@@ -238,7 +243,7 @@ func (e *executor) catchupOnHistory(ctx context.Context, t *backend.WorkflowTask
 
 		h, err := e.historyProvider.GetWorkflowInstanceHistory(ctx, t.WorkflowInstance, &e.lastSequenceID)
 		if err != nil {
-			return false, fmt.Errorf("getting workflow history: %w", err)
+			return false, ctxerrors.Wrap(err, "getting workflow history")
 		}
 
 		if err := e.replayHistory(h); err != nil {
@@ -256,7 +261,7 @@ func (e *executor) catchupOnHistory(ctx context.Context, t *backend.WorkflowTask
 				log.TaskSequenceIDKey, t.LastSequenceID,
 				log.LocalSequenceIDKey, e.lastSequenceID)
 
-			return false, errors.New("even after fetching history and replaying history executor state does not match task")
+			return false, ctxerrors.New("even after fetching history and replaying history executor state does not match task")
 		}
 	}
 
@@ -268,7 +273,7 @@ func (e *executor) replayHistory(h []*history.Event) error {
 	for _, event := range h {
 		if event.SequenceID < e.lastSequenceID {
 			e.logger.Error("history has older events than current state")
-			return errors.New("history has older events than current state")
+			return ctxerrors.New("history has older events than current state")
 		}
 
 		// Note: lastSequenceID is updated below after successful event execution.
@@ -276,7 +281,7 @@ func (e *executor) replayHistory(h []*history.Event) error {
 		e.workflowState.SetHistoryLength(e.lastSequenceID + 1)
 
 		if err := e.executeEvent(event); err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute executor")
 		}
 		e.lastSequenceID = event.SequenceID
 	}
@@ -292,7 +297,7 @@ func (e *executor) executeNewEvents(newEvents []*history.Event) ([]*history.Even
 		e.workflowState.SetHistoryLength(e.lastSequenceID + int64(i) + 1)
 
 		if err := e.executeEvent(event); err != nil {
-			return newEvents[:i], err
+			return newEvents[:i], ctxerrors.Wrap(err, "execute executor")
 		}
 	}
 
@@ -313,10 +318,11 @@ func (e *executor) executeNewEvents(newEvents []*history.Event) ([]*history.Even
 			}
 
 			return newEvents, tracing.WithSpanError(
-				e.workflowSpan, fmt.Errorf("workflow completed, but there are still pending futures: %s", pending))
+				e.workflowSpan, ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow completed, but there are still pending futures: %s", pending))
 		}
 
-		if canErr, ok := e.workflow.Error().(*continueasnew.Error); ok {
+		var canErr *continueasnew.Error
+		if errors.As(e.workflow.Error(), &canErr) {
 			e.workflowRestarted(e.workflow.Result(), canErr)
 		} else {
 			e.workflowCompleted(e.workflow.Result(), e.workflow.Error())
@@ -406,10 +412,14 @@ func (e *executor) executeEvent(event *history.Event) error {
 		err = e.handleTraceStarted(event, event.Attributes.(*history.TraceStartedAttributes))
 
 	default:
-		return fmt.Errorf("unknown event type: %v", event.Type)
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "unknown event type: %v", event.Type)
 	}
 
-	return err
+	if err != nil {
+		return ctxerrors.Wrap(err, "execute executor")
+	}
+
+	return nil
 }
 
 func (e *executor) handleWorkflowExecutionStarted(event *history.Event, a *history.ExecutionStartedAttributes) error {
@@ -417,7 +427,7 @@ func (e *executor) handleWorkflowExecutionStarted(event *history.Event, a *histo
 
 	wfFn, err := e.registry.GetWorkflow(a.Name)
 	if err != nil {
-		return fmt.Errorf("workflow %s not found", a.Name)
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow %s not found", a.Name)
 	}
 
 	// Set the parent span here, so we can associate the workflow span with its parent
@@ -457,17 +467,17 @@ func (e *executor) handleWorkflowTaskStarted(event *history.Event, a *history.Wo
 func (e *executor) handleActivityScheduled(event *history.Event, a *history.ActivityScheduledAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled an activity which could not be found")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity which could not be found")
 	}
 
 	sac, ok := c.(*command.ScheduleActivityCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution scheduled an activity, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity, not: %v", c.Type())
 	}
 
 	// Ensure the same activity was scheduled again
 	if a.Name != sac.Name {
-		return fmt.Errorf("previous workflow execution scheduled different type of activity: %s, %s", a.Name, sac.Name)
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled different type of activity: %s, %s", a.Name, sac.Name)
 	}
 
 	sac.Commit()
@@ -478,24 +488,24 @@ func (e *executor) handleActivityScheduled(event *history.Event, a *history.Acti
 func (e *executor) handleActivityCompleted(event *history.Event, a *history.ActivityCompletedAttributes) error {
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return fmt.Errorf("could not find pending future for activity completion")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "could not find pending future for activity completion")
 	}
 
 	err := f.Set(a.Result, nil)
 	if err != nil {
-		return fmt.Errorf("setting activity completed result: %w", err)
+		return ctxerrors.Wrap(err, "setting activity completed result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
 
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled an activity which could not be found")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity which could not be found")
 	}
 
 	sac, ok := c.(*command.ScheduleActivityCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution scheduled an activity, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity, not: %v", c.Type())
 	}
 
 	sac.Done()
@@ -506,24 +516,24 @@ func (e *executor) handleActivityCompleted(event *history.Event, a *history.Acti
 func (e *executor) handleActivityFailed(event *history.Event, a *history.ActivityFailedAttributes) error {
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return errors.New("no pending future for activity failed event")
+		return ctxerrors.New("no pending future for activity failed event")
 	}
 
 	actErr := workflowerrors.ToError(a.Error)
 	if err := f.Set(nil, actErr); err != nil {
-		return fmt.Errorf("setting activity failed result: %w", err)
+		return ctxerrors.Wrap(err, "setting activity failed result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
 
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled an activity which could not be found")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity which could not be found")
 	}
 
 	sac, ok := c.(*command.ScheduleActivityCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution scheduled an activity, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled an activity, not: %v", c.Type())
 	}
 
 	sac.Done()
@@ -534,11 +544,11 @@ func (e *executor) handleActivityFailed(event *history.Event, a *history.Activit
 func (e *executor) handleTimerScheduled(event *history.Event, a *history.TimerScheduledAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled a timer")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a timer")
 	}
 
 	if _, ok := c.(*command.ScheduleTimerCommand); !ok {
-		return fmt.Errorf("previous workflow execution scheduled a timer, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a timer, not: %v", c.Type())
 	}
 
 	c.Commit()
@@ -573,18 +583,18 @@ func (e *executor) handleTimerFired(event *history.Event, a *history.TimerFiredA
 	}
 
 	if err := f.Set(nil, nil); err != nil {
-		return fmt.Errorf("setting timer fired result: %w", err)
+		return ctxerrors.Wrap(err, "setting timer fired result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
 
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("no command found for timer fired event")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "no command found for timer fired event")
 	}
 
 	if _, ok := c.(*command.ScheduleTimerCommand); !ok {
-		return fmt.Errorf("schedule timer command not found, instead: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "schedule timer command not found, instead: %v", c.Type())
 	}
 
 	c.Done()
@@ -595,12 +605,12 @@ func (e *executor) handleTimerFired(event *history.Event, a *history.TimerFiredA
 func (e *executor) handleTimerCanceled(event *history.Event, a *history.TimerCanceledAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution canceled a timer")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution canceled a timer")
 	}
 
 	stc, ok := c.(*command.ScheduleTimerCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution canceled a timer, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution canceled a timer, not: %v", c.Type())
 	}
 
 	stc.HandleCancel()
@@ -613,7 +623,7 @@ func (e *executor) handleTimerCanceled(event *history.Event, a *history.TimerCan
 	}
 
 	if err := f.Set(nil, sync.Canceled); err != nil {
-		return fmt.Errorf("setting timer canceled result: %w", err)
+		return ctxerrors.Wrap(err, "setting timer canceled result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
@@ -624,16 +634,16 @@ func (e *executor) handleTimerCanceled(event *history.Event, a *history.TimerCan
 func (e *executor) handleSubWorkflowScheduled(event *history.Event, a *history.SubWorkflowScheduledAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled a sub workflow")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a sub workflow")
 	}
 
 	sswc, ok := c.(*command.ScheduleSubWorkflowCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution scheduled a sub workflow, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a sub workflow, not: %v", c.Type())
 	}
 
 	if a.Name != sswc.Name {
-		return fmt.Errorf("previous workflow execution scheduled different type of sub workflow: %s, %s", a.Name, sswc.Name)
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled different type of sub workflow: %s, %s", a.Name, sswc.Name)
 	}
 
 	// If we are replaying this event, the command will have generated a new instance ID. Ensure we use the same one as
@@ -648,12 +658,12 @@ func (e *executor) handleSubWorkflowScheduled(event *history.Event, a *history.S
 func (e *executor) handleSubWorkflowCancellationRequest(event *history.Event, a *history.SubWorkflowCancellationRequestedAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution cancelled a sub-workflow execution")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution cancelled a sub-workflow execution")
 	}
 
 	sswc, ok := c.(*command.ScheduleSubWorkflowCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
 	}
 
 	sswc.HandleCancel()
@@ -664,24 +674,24 @@ func (e *executor) handleSubWorkflowCancellationRequest(event *history.Event, a 
 func (e *executor) handleSubWorkflowFailed(event *history.Event, a *history.SubWorkflowFailedAttributes) error {
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return errors.New("no pending future found for sub workflow failed event")
+		return ctxerrors.New("no pending future found for sub workflow failed event")
 	}
 
 	wfErr := workflowerrors.ToError(a.Error)
 
 	if err := f.Set(nil, wfErr); err != nil {
-		return fmt.Errorf("setting sub workflow failed result: %w", err)
+		return ctxerrors.Wrap(err, "setting sub workflow failed result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
 
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled a sub-workflow execution")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a sub-workflow execution")
 	}
 
 	if _, ok := c.(*command.ScheduleSubWorkflowCommand); !ok {
-		return fmt.Errorf("previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
 	}
 
 	c.Done()
@@ -692,22 +702,22 @@ func (e *executor) handleSubWorkflowFailed(event *history.Event, a *history.SubW
 func (e *executor) handleSubWorkflowCompleted(event *history.Event, a *history.SubWorkflowCompletedAttributes) error {
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return errors.New("no pending future found for sub workflow completed event")
+		return ctxerrors.New("no pending future found for sub workflow completed event")
 	}
 
 	if err := f.Set(a.Result, nil); err != nil {
-		return fmt.Errorf("setting sub workflow completed result: %w", err)
+		return ctxerrors.Wrap(err, "setting sub workflow completed result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
 
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution cancelled a sub-workflow execution")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution cancelled a sub-workflow execution")
 	}
 
 	if _, ok := c.(*command.ScheduleSubWorkflowCommand); !ok {
-		return fmt.Errorf("previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution cancelled a sub-workflow execution, not: %v", c.Type())
 	}
 
 	c.Done()
@@ -725,23 +735,23 @@ func (e *executor) handleSignalReceived(event *history.Event, a *history.SignalR
 func (e *executor) handleSideEffectResult(event *history.Event, a *history.SideEffectResultAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution scheduled a side effect")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a side effect")
 	}
 
 	sec, ok := c.(*command.SideEffectCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution scheduled a side effect, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution scheduled a side effect, not: %v", c.Type())
 	}
 
 	sec.Done()
 
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return errors.New("no pending future found for side effect result event")
+		return ctxerrors.New("no pending future found for side effect result event")
 	}
 
 	if err := f.Set(a.Result, nil); err != nil {
-		return fmt.Errorf("setting side effect result: %w", err)
+		return ctxerrors.Wrap(err, "setting side effect result")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)
@@ -752,23 +762,23 @@ func (e *executor) handleSideEffectResult(event *history.Event, a *history.SideE
 func (e *executor) handleTraceStarted(event *history.Event, a *history.TraceStartedAttributes) error {
 	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
 	if c == nil {
-		return fmt.Errorf("previous workflow execution started a trace")
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution started a trace")
 	}
 
 	stc, ok := c.(*command.StartTraceCommand)
 	if !ok {
-		return fmt.Errorf("previous workflow execution started a trace, not: %v", c.Type())
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "previous workflow execution started a trace, not: %v", c.Type())
 	}
 
 	stc.Done()
 
 	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
 	if !ok {
-		return errors.New("no pending future found for start trace event")
+		return ctxerrors.New("no pending future found for start trace event")
 	}
 
 	if err := f.Set(a.SpanID, nil); err != nil {
-		return fmt.Errorf("setting start trace spanID: %w", err)
+		return ctxerrors.Wrap(err, "setting start trace spanID")
 	}
 
 	e.workflowState.RemoveFuture(event.ScheduleEventID)

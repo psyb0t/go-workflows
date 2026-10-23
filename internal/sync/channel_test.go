@@ -224,7 +224,7 @@ func Test_Channel_Unbuffered(t *testing.T) {
 					})
 				}
 
-				s.Execute()
+				require.NoError(t, s.Execute())
 				require.Equal(t, 0, r)
 
 				for i := 0; i < 10; i++ {
@@ -236,7 +236,7 @@ func Test_Channel_Unbuffered(t *testing.T) {
 				}
 
 				for s.RunningCoroutines() > 0 {
-					s.Execute()
+					require.NoError(t, s.Execute())
 				}
 
 				require.Equal(t, 10, r)
@@ -401,7 +401,7 @@ func Test_Channel_Buffered(t *testing.T) {
 				})
 				cr.Execute()
 
-				require.EqualError(t, cr.Error(), "panic: channel closed")
+				require.ErrorContains(t, cr.Error(), "panic: channel closed")
 			},
 		},
 	}

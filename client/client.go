@@ -2,33 +2,29 @@ package client
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
+
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 
 	"github.com/benbjohnson/clock"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	a "github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
+	"github.com/psyb0t/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/workflow"
 )
-
-// ErrWorkflowCanceled is returned when a workflow was already canceled.
-var ErrWorkflowCanceled = errors.New("workflow canceled")
-
-// ErrWorkflowTerminated is returned when a workflow was already terminated.
-var ErrWorkflowTerminated = errors.New("workflow terminated")
 
 type WorkflowInstanceOptions struct {
 	// Queue is the queue the workflow instance will be created in. Must be a valid queue
@@ -62,17 +58,17 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 
 		// Check arguments if actual workflow function given here
 		if err := a.ParamsMatch(wf, args...); err != nil {
-			return nil, err
+			return nil, ctxerrors.Wrap(err, "execute client")
 		}
 	}
 
 	inputs, err := a.ArgsToInputs(c.backend.Options().Converter, args...)
 	if err != nil {
-		return nil, fmt.Errorf("converting arguments: %w", err)
+		return nil, ctxerrors.Wrap(err, "converting arguments")
 	}
 
 	if options.InstanceID == "" {
-		return nil, errors.New("InstanceID must be set")
+		return nil, ctxerrors.Wrap(commerr.ErrInvalidArgument, "InstanceID must be set")
 	}
 
 	if options.Queue == "" {
@@ -93,7 +89,7 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 	// Inject state from any propagators
 	for _, propagator := range c.backend.Options().ContextPropagators {
 		if err := propagator.Inject(ctx, metadata); err != nil {
-			return nil, fmt.Errorf("injecting context to propagate: %w", err)
+			return nil, ctxerrors.Wrap(err, "injecting context to propagate")
 		}
 	}
 
@@ -111,7 +107,7 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 		})
 
 	if err := c.backend.CreateWorkflowInstance(ctx, wfi, startedEvent); err != nil {
-		return nil, fmt.Errorf("creating workflow instance: %w", err)
+		return nil, ctxerrors.Wrap(err, "creating workflow instance")
 	}
 
 	c.backend.Options().Logger.Debug(
@@ -147,7 +143,7 @@ func (c *Client) SignalWorkflow(ctx context.Context, instanceID string, name str
 
 	input, err := c.backend.Options().Converter.To(arg)
 	if err != nil {
-		return fmt.Errorf("converting arguments: %w", err)
+		return ctxerrors.Wrap(err, "converting arguments")
 	}
 
 	signalEvent := history.NewPendingEvent(
@@ -162,7 +158,10 @@ func (c *Client) SignalWorkflow(ctx context.Context, instanceID string, name str
 	err = c.backend.SignalWorkflow(ctx, instanceID, signalEvent)
 	if err != nil {
 		span.RecordError(err)
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute client")
+		}
+		return nil
 	}
 
 	c.backend.Options().Logger.Debug("Signaled workflow instance", log.InstanceIDKey, instanceID)
@@ -203,7 +202,7 @@ func (c *Client) WaitForWorkflowInstance(ctx context.Context, instance *workflow
 	for range ticker.C {
 		s, err := c.backend.GetWorkflowInstanceState(ctx, instance)
 		if err != nil {
-			return fmt.Errorf("getting workflow state: %w", err)
+			return ctxerrors.Wrap(err, "getting workflow state")
 		}
 
 		if s == core.WorkflowInstanceStateFinished || s == core.WorkflowInstanceStateContinuedAsNew {
@@ -211,7 +210,7 @@ func (c *Client) WaitForWorkflowInstance(ctx context.Context, instance *workflow
 		}
 	}
 
-	return errors.New("workflow did not finish in specified timeout")
+	return ctxerrors.New("workflow did not finish in specified timeout")
 }
 
 // GetWorkflowResult gets the workflow result for the given workflow result. It first waits for the workflow to finish or until
@@ -225,12 +224,12 @@ func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow
 	defer span.End()
 
 	if err := c.WaitForWorkflowInstance(ctx, instance, timeout); err != nil {
-		return *new(T), fmt.Errorf("workflow did not finish in time: %w", err)
+		return *new(T), ctxerrors.Wrap(err, "workflow did not finish in time")
 	}
 
 	h, err := b.GetWorkflowInstanceHistory(ctx, instance, nil) // future: could optimize this by retriving only the very last entry in the history
 	if err != nil {
-		return *new(T), fmt.Errorf("getting workflow history: %w", err)
+		return *new(T), ctxerrors.Wrap(err, "getting workflow history")
 	}
 
 	// Iterate over history backwards
@@ -245,7 +244,7 @@ func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow
 
 			var r T
 			if err := b.Options().Converter.From(a.Result, &r); err != nil {
-				return *new(T), fmt.Errorf("converting result: %w", err)
+				return *new(T), ctxerrors.Wrap(err, "converting result")
 			}
 
 			return r, nil
@@ -255,7 +254,7 @@ func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow
 
 			var r T
 			if err := b.Options().Converter.From(a.Result, &r); err != nil {
-				return *new(T), fmt.Errorf("converting result: %w", err)
+				return *new(T), ctxerrors.Wrap(err, "converting result")
 			}
 
 			return r, nil
@@ -268,7 +267,7 @@ func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow
 		}
 	}
 
-	return *new(T), errors.New("workflow finished, but could not find result event")
+	return *new(T), ctxerrors.New("workflow finished, but could not find result event")
 }
 
 // RemoveWorkflowInstance removes the given workflow instance from the backend.

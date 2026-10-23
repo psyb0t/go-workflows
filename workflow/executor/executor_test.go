@@ -4,27 +4,27 @@ import (
 	"context"
 	"log"
 	"log/slog"
-	"runtime"
 	"testing"
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/goleak"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/command"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/registry"
+	wf "github.com/psyb0t/go-workflows/workflow"
 )
 
 type testHistoryProvider struct {
@@ -63,7 +63,9 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(wf)
+				if err := r.RegisterWorkflow(wf); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask(i.InstanceID, wf)
 
@@ -89,8 +91,12 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithActivity)
-				r.RegisterActivity(activity1)
+				if err := r.RegisterWorkflow(workflowWithActivity); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterActivity(activity1); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := &backend.WorkflowTask{
 					ID:               "taskID",
@@ -135,8 +141,12 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithActivity)
-				r.RegisterActivity(activity1)
+				if err := r.RegisterWorkflow(workflowWithActivity); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterActivity(activity1); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				inputs, _ := converter.DefaultConverter.To(42)
 				result, _ := converter.DefaultConverter.To(42)
@@ -200,8 +210,12 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithActivity)
-				r.RegisterActivity(activity1)
+				if err := r.RegisterWorkflow(workflowWithActivity); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterActivity(activity1); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				inputs, _ := converter.DefaultConverter.To(42)
 				result, _ := converter.DefaultConverter.To(42)
@@ -291,8 +305,12 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithSelector)
-				r.RegisterActivity(activity1)
+				if err := r.RegisterWorkflow(workflowWithSelector); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterActivity(activity1); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := &backend.WorkflowTask{
 					ID:               "taskID",
@@ -338,7 +356,9 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithTimer)
+				if err := r.RegisterWorkflow(workflowWithTimer); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := &backend.WorkflowTask{
 					ID:               "taskID",
@@ -376,7 +396,9 @@ func Test_Executor(t *testing.T) {
 					wf.ScheduleTimer(tctx, time.Millisecond*5)
 
 					// Cause checkpoint
-					wf.ExecuteActivity[any](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx)
+					if _, err := wf.ExecuteActivity[any](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					cancel()
 					cancel()
@@ -384,8 +406,12 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithTimer)
-				r.RegisterActivity(activity1)
+				if err := r.RegisterWorkflow(workflowWithTimer); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterActivity(activity1); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask(i.InstanceID, workflowWithTimer)
 
@@ -417,7 +443,9 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflowWithSignal)
+				if err := r.RegisterWorkflow(workflowWithSignal); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				s, err := converter.DefaultConverter.To("")
 				require.NoError(t, err)
@@ -461,7 +489,9 @@ func Test_Executor(t *testing.T) {
 					panic("wf error")
 				}
 
-				r.RegisterWorkflow(workflowPanic)
+				if err := r.RegisterWorkflow(workflowPanic); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task1 := &backend.WorkflowTask{
 					ID:               "taskid",
@@ -503,8 +533,12 @@ func Test_Executor(t *testing.T) {
 					return err
 				}
 
-				r.RegisterWorkflow(workflow)
-				r.RegisterWorkflow(subworkflow)
+				if err := r.RegisterWorkflow(workflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterWorkflow(subworkflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask("instanceID", workflow)
 
@@ -530,17 +564,25 @@ func Test_Executor(t *testing.T) {
 						InstanceID: "subworkflow",
 					}, subworkflow)
 
-					wf.Sleep(ctx, time.Millisecond)
+					if err := wf.Sleep(ctx, time.Millisecond); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					cancel()
 
-					f.Get(ctx)
+					if _, err := f.Get(ctx); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					return nil
 				}
 
-				r.RegisterWorkflow(workflow)
-				r.RegisterWorkflow(subworkflow)
+				if err := r.RegisterWorkflow(workflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterWorkflow(subworkflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask("instanceID", workflow)
 				result, err := e.ExecuteTask(context.Background(), task)
@@ -604,13 +646,19 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(workflow)
-				r.RegisterWorkflow(subworkflow)
+				if err := r.RegisterWorkflow(workflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
+				if err := r.RegisterWorkflow(subworkflow); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask("instanceID", workflow)
 
 				require.PanicsWithValue(t, "workflow completed, but there are still pending futures: [1-subworkflow:1 2-timer:2s 3-timer-delay:2s]", func() {
-					e.ExecuteTask(context.Background(), task)
+					if _, err := e.ExecuteTask(context.Background(), task); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 				})
 			},
 		},
@@ -626,20 +674,22 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(wf)
+				if err := r.RegisterWorkflow(wf); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask(i.InstanceID, wf)
 
-				goRoutines := runtime.NumGoroutine()
+				ignoreExisting := goleak.IgnoreCurrent()
 
 				_, err := e.ExecuteTask(context.Background(), task)
 				require.NoError(t, err)
 
-				require.Equal(t, goRoutines+1, runtime.NumGoroutine())
+				require.Equal(t, 1, e.workflow.s.RunningCoroutines())
 
 				e.Close()
 
-				require.Equal(t, goRoutines, runtime.NumGoroutine())
+				goleak.VerifyNone(t, ignoreExisting)
 			},
 		},
 		{
@@ -661,7 +711,9 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(wf)
+				if err := r.RegisterWorkflow(wf); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask(i.InstanceID, wf)
 
@@ -689,22 +741,24 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(wf)
+				if err := r.RegisterWorkflow(wf); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				task := startWorkflowTask(i.InstanceID, wf)
 
-				goRoutines := runtime.NumGoroutine()
+				ignoreExisting := goleak.IgnoreCurrent()
 
 				_, err := e.ExecuteTask(context.Background(), task)
 				require.NoError(t, err)
 
 				// Expect two pending goroutines
-				require.Equal(t, goRoutines+2, runtime.NumGoroutine())
+				require.Equal(t, 2, e.workflow.s.RunningCoroutines())
 
 				e.Close()
 
 				// Expect them to be removed
-				require.Equal(t, goRoutines, runtime.NumGoroutine())
+				goleak.VerifyNone(t, ignoreExisting)
 			},
 		},
 		{
@@ -715,7 +769,9 @@ func Test_Executor(t *testing.T) {
 					return nil
 				}
 
-				r.RegisterWorkflow(wf)
+				if err := r.RegisterWorkflow(wf); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				// Create a task with WorkflowExecutionContinuedAsNew event
 				result, _ := converter.DefaultConverter.To(42)

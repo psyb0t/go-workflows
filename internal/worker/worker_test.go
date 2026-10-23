@@ -11,11 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 // testLogger captures log output for testing
@@ -356,7 +357,7 @@ func TestWorker_Poll(t *testing.T) {
 
 		task, err := worker.poll(ctx, time.Second)
 		require.Error(t, err)
-		require.Equal(t, expectedErr, err)
+		require.ErrorIs(t, err, expectedErr)
 		require.Nil(t, task)
 
 		mockTaskWorker.AssertExpectations(t)
@@ -891,27 +892,27 @@ func TestWorker_ErrorHandling(t *testing.T) {
 
 		worker := NewWorker(mockBackend, mockTaskWorker, options)
 
-		// Create a context that will be cancelled to cause add error
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		task := &testTask{ID: 1, Data: "test"}
 
 		mockTaskWorker.On("Start", ctx, mock.Anything).Return(nil)
 
-		// Mock Get to return a task, but we'll cancel context before it gets processed
-		mockTaskWorker.On("Get", mock.Anything, mock.Anything).Return(task, nil).Maybe()
-		mockTaskWorker.On("Get", mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+		mockTaskWorker.On("Get", mock.Anything, mock.Anything).Return(task, nil).Once().Run(func(mock.Arguments) {
+			cancel()
+		})
+		// A task returned while shutdown races dispatch may already be in flight.
+		mockTaskWorker.On("Execute", mock.Anything, task).Return(&testResult{}, nil).Maybe()
+		mockTaskWorker.On("Complete", mock.Anything, mock.Anything, task).Return(nil).Maybe()
 
 		err := worker.Start(ctx)
 		require.NoError(t, err)
 
-		// Cancel context immediately to cause task queue add to fail
-		cancel()
-
 		err = worker.WaitForCompletion()
 		require.NoError(t, err)
 
-		// Don't assert specific expectations since timing can vary
+		mockTaskWorker.AssertExpectations(t)
 	})
 }
 

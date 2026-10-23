@@ -7,12 +7,15 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -47,10 +50,16 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(WorkflowErrGroup)
+	if err := w.RegisterWorkflow(WorkflowErrGroup); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
-	w.RegisterActivity(Activity2)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(Activity2); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -75,7 +84,7 @@ func WorkflowErrGroup(ctx workflow.Context, msg string) (string, error) {
 		a1 := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12)
 		r, err := a1.Get(ctx)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute concurrent errgroup")
 		}
 
 		logger.Debug("A1 result", "r", r)
@@ -86,7 +95,7 @@ func WorkflowErrGroup(ctx workflow.Context, msg string) (string, error) {
 		a2 := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity2)
 		r, err := a2.Get(ctx)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute concurrent errgroup")
 		}
 
 		logger.Debug("A2 result", "r", r)
@@ -95,7 +104,7 @@ func WorkflowErrGroup(ctx workflow.Context, msg string) (string, error) {
 
 	// Wait for both goroutines to finish and return the first error, if any
 	if err := g.Wait(gctx); err != nil {
-		return "", err
+		return "", ctxerrors.Wrap(err, "execute concurrent errgroup")
 	}
 
 	return "result", nil

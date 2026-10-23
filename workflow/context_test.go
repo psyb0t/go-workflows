@@ -4,8 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/internal/sync"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/internal/sync"
 )
 
 func TestCause(t *testing.T) {

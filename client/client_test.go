@@ -8,16 +8,19 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/ctxerrors/commerr"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/metrics"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_Client_CreateWorkflowInstance_ParamMismatch(t *testing.T) {
@@ -37,7 +40,8 @@ func Test_Client_CreateWorkflowInstance_ParamMismatch(t *testing.T) {
 		InstanceID: "id",
 	}, wf, "foo")
 	require.Zero(t, result)
-	require.EqualError(t, err, "mismatched argument type: expected int, got string")
+	require.ErrorIs(t, err, commerr.ErrInvalidArgument)
+	require.ErrorContains(t, err, "mismatched argument type: expected int, got string")
 	b.AssertExpectations(t)
 }
 
@@ -87,7 +91,7 @@ func Test_Client_GetWorkflowResultTimeout(t *testing.T) {
 
 	result, err := GetWorkflowResult[int](ctx, c, instance, time.Microsecond*1)
 	require.Zero(t, result)
-	require.EqualError(t, err, "workflow did not finish in time: workflow did not finish in specified timeout")
+	require.ErrorContains(t, err, "workflow did not finish in time: workflow did not finish in specified timeout")
 	b.AssertExpectations(t)
 }
 

@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func TestGrouping_MultipleEventsSameInstance(t *testing.T) {

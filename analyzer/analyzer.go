@@ -4,6 +4,8 @@ import (
 	"go/ast"
 	"go/types"
 
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -19,7 +21,7 @@ func New(settings any) (register.LinterPlugin, error) {
 	// You can use https://github.com/go-viper/mapstructure to convert map to struct.
 	s, err := register.DecodeSettings[Settings](settings)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute analyzer")
 	}
 
 	return &GoWorkflowsPlugin{Settings: s}, nil
@@ -95,7 +97,7 @@ func (w *GoWorkflowsPlugin) run(pass *analysis.Pass) (interface{}, error) {
 
 		switch n := node.(type) {
 		case *ast.ImportSpec:
-			if n.Path.Value == `"github.com/cschleiden/go-workflows/workflow"` {
+			if n.Path.Value == `"github.com/psyb0t/go-workflows/workflow"` {
 				if n.Name != nil {
 					workflowImportName = n.Name.Name
 				} else {
@@ -228,7 +230,6 @@ func checkNamed(pass *analysis.Pass, ref types.Object, named *types.Named) {
 			}
 		}
 	}
-
 }
 
 func isWorkflow(workflowImportName string, funcDecl *ast.FuncDecl) bool {
@@ -250,9 +251,5 @@ func isWorkflow(workflowImportName string, funcDecl *ast.FuncDecl) bool {
 	}
 
 	selname := firstParam.Sel.Name
-	if xname.Name+"."+selname != workflowImportName+".Context" {
-		return false
-	}
-
-	return true
+	return xname.Name+"."+selname == workflowImportName+".Context"
 }

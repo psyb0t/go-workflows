@@ -3,7 +3,7 @@ package history
 import (
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/tracing"
 )
 
 type TimerFiredAttributes struct {

@@ -1,7 +1,7 @@
 package sqlite
 
 import (
-	"github.com/cschleiden/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend"
 )
 
 type options struct {

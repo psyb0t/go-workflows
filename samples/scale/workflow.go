@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Workflow1(ctx workflow.Context, msg string) (string, error) {
@@ -14,13 +16,13 @@ func Workflow1(ctx workflow.Context, msg string) (string, error) {
 
 	r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("getting activity 1 result: %w", err)
+		return "", ctxerrors.Wrap(err, "getting activity 1 result")
 	}
 	// logger.Debug("R1 result", "r1", r1)
 
 	r2, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity2).Get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("getting activity 2 result: %w", err)
+		return "", ctxerrors.Wrap(err, "getting activity 2 result")
 	}
 	// logger.Debug("R2 result", "r2", r2)
 

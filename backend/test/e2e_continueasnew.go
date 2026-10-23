@@ -5,13 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 var e2eContinueAsNewTests = []backendTest{
@@ -93,9 +96,15 @@ var e2eContinueAsNewTests = []backendTest{
 					InstanceID: swfInstanceID,
 				}, swf, 0).Get(ctx)
 
-				workflow.ScheduleTimer(ctx, time.Second*2).Get(ctx)
+				if _, err := workflow.ScheduleTimer(ctx, time.Second*2).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
-				return r, err
+				if err != nil {
+					return r, ctxerrors.Wrap(err, "execute e2e continueasnew")
+				}
+
+				return r, nil
 			}
 
 			register(t, ctx, w, []interface{}{wf, swf}, nil)

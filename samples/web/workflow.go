@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Inputs struct {

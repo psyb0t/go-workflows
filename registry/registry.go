@@ -1,13 +1,15 @@
 package registry
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"sync"
 
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/fn"
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/fn"
 )
 
 type Registry struct {
@@ -30,6 +32,10 @@ type registerConfig struct {
 }
 
 func (r *Registry) RegisterWorkflow(workflow any, opts ...RegisterOption) error {
+	value := reflect.ValueOf(workflow)
+	if !value.IsValid() || value.Kind() != reflect.Func || value.IsNil() {
+		return &ErrInvalidWorkflow{"workflow must be a non-nil function"}
+	}
 	cfg := registerOptions(opts).applyRegisterOptions(registerConfig{})
 	name := cfg.Name
 	if name == "" {
@@ -75,6 +81,10 @@ func (r *Registry) RegisterWorkflow(workflow any, opts ...RegisterOption) error 
 }
 
 func (r *Registry) RegisterActivity(activity any, opts ...RegisterOption) error {
+	value := reflect.ValueOf(activity)
+	if !value.IsValid() || ((value.Kind() == reflect.Func || value.Kind() == reflect.Ptr) && value.IsNil()) {
+		return &ErrInvalidActivity{"activity must not be nil"}
+	}
 	cfg := registerOptions(opts).applyRegisterOptions(registerConfig{})
 
 	t := reflect.TypeOf(activity)
@@ -83,15 +93,14 @@ func (r *Registry) RegisterActivity(activity any, opts ...RegisterOption) error 
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
 		return r.registerActivitiesFromStruct(activity)
 	}
+	if err := checkActivity(t); err != nil {
+		return ctxerrors.Wrap(err, "validate activity")
+	}
 
 	// Activity as function
 	name := cfg.Name
 	if name == "" {
 		name = fn.Name(activity)
-	}
-
-	if err := checkActivity(reflect.TypeOf(activity)); err != nil {
-		return err
 	}
 
 	r.Lock()
@@ -123,7 +132,7 @@ func (r *Registry) registerActivitiesFromStruct(a interface{}) error {
 		}
 
 		if err := checkActivity(mt.Type); err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute registry")
 		}
 
 		name := mt.Name
@@ -158,7 +167,7 @@ func (r *Registry) GetWorkflow(name string) (any, error) {
 		return workflow, nil
 	}
 
-	return nil, errors.New("workflow not found")
+	return nil, ctxerrors.Wrap(commerr.ErrNotFound, "workflow not found")
 }
 
 func (r *Registry) GetActivity(name string) (interface{}, error) {
@@ -169,5 +178,5 @@ func (r *Registry) GetActivity(name string) (interface{}, error) {
 		return activity, nil
 	}
 
-	return nil, errors.New("activity not found")
+	return nil, ctxerrors.Wrap(commerr.ErrNotFound, "activity not found")
 }

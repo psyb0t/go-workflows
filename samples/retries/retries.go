@@ -2,18 +2,21 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -49,10 +52,16 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(WorkflowWithFailures)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(WorkflowWithFailures); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -73,7 +82,7 @@ func Workflow1(ctx workflow.Context, msg string) error {
 		},
 	}, WorkflowWithFailures, "Hello world"+uuid.NewString()).Get(ctx)
 	if err != nil {
-		return fmt.Errorf("starting subworkflow: %w", err)
+		return ctxerrors.Wrap(err, "starting subworkflow")
 	}
 
 	logger.Debug("Completing workflow 1")
@@ -89,7 +98,7 @@ func WorkflowWithFailures(ctx workflow.Context, msg string) error {
 
 	workflowCalls++
 	if workflowCalls < 3 {
-		return fmt.Errorf("workflow error %d", workflowCalls)
+		return ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow error %d", workflowCalls)
 	}
 
 	// Illustrate activity retries. The called activity will fail a few times, and its execution will be retried.
@@ -102,7 +111,7 @@ func WorkflowWithFailures(ctx workflow.Context, msg string) error {
 	}, Activity1, 35).Get(ctx)
 	if err != nil {
 		logger.Error("Error from Activity 1", "err", err)
-		return fmt.Errorf("getting result from activity 1: %w", err)
+		return ctxerrors.Wrap(err, "getting result from activity 1")
 	}
 
 	logger.Debug("R1 result", "r1", r1)
@@ -122,7 +131,7 @@ func Activity1(ctx context.Context, a int) (int, error) {
 		time.Sleep(2 * time.Second)
 
 		log.Println(">> Activity error", activityCalls)
-		return 0, fmt.Errorf("activity error %d", activityCalls)
+		return 0, ctxerrors.Wrapf(commerr.ErrInvalidState, "activity error %d", activityCalls)
 	}
 
 	return a, nil

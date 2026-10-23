@@ -4,16 +4,19 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/tester"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/tester"
 )
 
 func Test_Workflow(t *testing.T) {
 	tester := tester.NewWorkflowTester[any](Workflow1)
 
-	tester.Registry().RegisterWorkflow(WorkflowWithFailures)
+	if err := tester.Registry().RegisterWorkflow(WorkflowWithFailures); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.OnActivity(Activity1, mock.Anything, mock.Anything).Return(42, nil).Once()
 

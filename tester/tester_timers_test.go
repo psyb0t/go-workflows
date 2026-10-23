@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_Timer(t *testing.T) {
@@ -31,11 +33,15 @@ type timerResult struct {
 func workflowTimer(ctx workflow.Context) (timerResult, error) {
 	t1 := workflow.Now(ctx)
 
-	workflow.ScheduleTimer(ctx, 30*time.Second).Get(ctx)
+	if _, err := workflow.ScheduleTimer(ctx, 30*time.Second).Get(ctx); err != nil {
+		return timerResult{}, err
+	}
 
 	t2 := workflow.Now(ctx)
 
-	workflow.ScheduleTimer(ctx, 30*time.Second).Get(ctx)
+	if _, err := workflow.ScheduleTimer(ctx, 30*time.Second).Get(ctx); err != nil {
+		return timerResult{}, err
+	}
 
 	return timerResult{
 		T1: t1,
@@ -82,7 +88,9 @@ func workflowTimerCancellation(ctx workflow.Context) (time.Time, error) {
 
 func Test_TimerSubworkflowCancellation(t *testing.T) {
 	tester := NewWorkflowTester[time.Time](workflowSubWorkflowTimerCancellation)
-	tester.Registry().RegisterWorkflow(timerCancellationSubWorkflow)
+	if err := tester.Registry().RegisterWorkflow(timerCancellationSubWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 
@@ -96,7 +104,9 @@ func workflowSubWorkflowTimerCancellation(ctx workflow.Context) error {
 	_, err := workflow.CreateSubWorkflowInstance[any](ctx, workflow.DefaultSubWorkflowOptions, timerCancellationSubWorkflow).Get(ctx)
 
 	// Wait long enough for the second timer in timerCancellationSubWorkflow to fire
-	workflow.Sleep(ctx, 20*time.Second)
+	if err := workflow.Sleep(ctx, 20*time.Second); err != nil {
+		return err
+	}
 
 	return err
 }
@@ -138,7 +148,9 @@ func Test_TimerRespondingWithoutNewEvents(t *testing.T) {
 }
 
 func workflowTimerRespondingWithoutNewEvents(ctx workflow.Context) error {
-	workflow.ScheduleTimer(ctx, 1*time.Second).Get(ctx)
+	if _, err := workflow.ScheduleTimer(ctx, 1*time.Second).Get(ctx); err != nil {
+		return err
+	}
 
 	workflow.Select(
 		ctx,
@@ -176,6 +188,7 @@ func Test_WallClockTimer_Canceled(t *testing.T) {
 }
 
 func Test_Timers_SetsTimeModeCorrectly(t *testing.T) {
+	releaseActivity := make(chan struct{})
 	activity1 := func() error {
 		return nil
 	}
@@ -185,12 +198,16 @@ func Test_Timers_SetsTimeModeCorrectly(t *testing.T) {
 
 		// This will be executed in wall-clock mode
 		workflow.ScheduleTimer(tctx, time.Millisecond*50)
-		workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx)
+		if _, err := workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 		cancel()
 
 		// This will switch to time-travel
 		tctx, _ = workflow.WithCancel(ctx)
-		workflow.ScheduleTimer(tctx, time.Hour*24).Get(ctx)
+		if _, err := workflow.ScheduleTimer(tctx, time.Hour*24).Get(ctx); err != nil {
+			t.Errorf("unexpected operation error: %v", err)
+		}
 
 		return nil
 	}
@@ -199,7 +216,10 @@ func Test_Timers_SetsTimeModeCorrectly(t *testing.T) {
 
 	tester := NewWorkflowTester[string](wf, WithTestTimeout(time.Second*10), WithLogger(dl.logger))
 
-	tester.OnActivity(activity1).Return("activity", nil)
+	tester.OnActivity(activity1).Return("activity", nil).Run(func(mock.Arguments) {
+		<-releaseActivity
+	})
+	tester.ScheduleCallback(time.Millisecond, func() { close(releaseActivity) })
 
 	tester.Execute(context.Background())
 
@@ -221,7 +241,9 @@ func Test_Timers_MultipleTimers(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			tctx, cancel := workflow.WithCancel(ctx)
 			workflow.ScheduleTimer(tctx, time.Millisecond*10)
-			workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx)
+			if _, err := workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, activity1).Get(ctx); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 
 			cancel()
 		}

@@ -10,7 +10,8 @@ import (
 )
 
 func SpanWithStartTime(
-	ctx context.Context, tracer trace.Tracer, name string, spanID trace.SpanID, startTime time.Time, opts ...trace.SpanStartOption) trace.Span {
+	ctx context.Context, tracer trace.Tracer, name string, spanID trace.SpanID, startTime time.Time, opts ...trace.SpanStartOption,
+) trace.Span {
 	opts = append(opts, trace.WithTimestamp(startTime), trace.WithSpanKind(trace.SpanKindConsumer))
 	_, span := tracer.Start(ctx,
 		name,
@@ -62,6 +63,7 @@ func setSpanContext(span trace.Span, sc trace.SpanContext) {
 }
 
 func setUnexportedField(field reflect.Value, value interface{}) {
+	// #nosec G103 -- OTel has no public setter for replayed span IDs. The caller verifies this SDK field before mutation.
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).
 		Elem().
 		Set(reflect.ValueOf(value))

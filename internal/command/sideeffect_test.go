@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend/history"
 )
 
 func TestSideEffectCommand_StateTransitions(t *testing.T) {
@@ -27,7 +28,7 @@ func TestSideEffectCommand_StateTransitions(t *testing.T) {
 		{"Done_after_commit", func(t *testing.T, c *SideEffectCommand, clock clock.Clock) {
 			c.Commit()
 
-			require.PanicsWithError(t, "invalid state transition for command SideEffect: Done -> Done", func() {
+			assertInvalidStatePanic(t, "invalid state transition for command SideEffect: Done -> Done", func() {
 				c.Done()
 			})
 		}},

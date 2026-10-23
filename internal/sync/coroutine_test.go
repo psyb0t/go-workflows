@@ -222,5 +222,5 @@ func Test_Coroutine_Panic(t *testing.T) {
 
 	require.True(t, c.Finished())
 	require.Error(t, c.Error())
-	require.Equal(t, "panic: test panic", c.Error().Error())
+	require.ErrorContains(t, c.Error(), "panic: test panic")
 }

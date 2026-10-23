@@ -4,23 +4,30 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	scale "github.com/cschleiden/go-workflows/samples/scale"
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	scale "github.com/psyb0t/go-workflows/samples/scale"
 )
 
-var tostart = flag.Int("count", 100, "Number of workflow instances to start")
-var count int32
+var (
+	tostart = flag.Int("count", 100, "Number of workflow instances to start")
+	count   int32
+)
 
 func main() {
 	ctx := context.Background()
 	b := samples.GetBackend("scale", false)
 
+	if *tostart < 0 || *tostart > math.MaxInt32 {
+		panic("count must fit a nonnegative int32")
+	}
 	count = int32(*tostart)
 
 	// Start workflow via client

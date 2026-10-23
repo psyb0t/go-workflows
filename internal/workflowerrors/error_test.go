@@ -1,11 +1,67 @@
 package workflowerrors
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/stretchr/testify/require"
 )
+
+func TestSerializedErrorBoundaries(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, input string
+		valid       bool
+	}{
+		{name: "null", input: "null"},
+		{name: "malformed", input: "{"},
+		{name: "wrong shape", input: "[]"},
+		{name: "empty object", input: "{}", valid: true},
+		{name: "nested Unicode", input: `{"message":"échec","cause":{"message":"故障","permanent":true}}`, valid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var got Error
+			var err error
+			require.NotPanics(t, func() { err = json.Unmarshal([]byte(tc.input), &got) })
+			if tc.valid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestPermanentErrorThroughWrappers(t *testing.T) {
+	t.Parallel()
+	permanent := NewPermanentError(errors.New("refused"))
+	for _, tc := range []struct {
+		name  string
+		err   error
+		retry bool
+	}{
+		{name: "nil", retry: true},
+		{name: "ordinary", err: ctxerrors.Wrap(errors.New("retry"), "operation"), retry: true},
+		{name: "wrapped permanent", err: ctxerrors.Wrap(permanent, "operation")},
+		{name: "nested permanent", err: &Error{Message: "outer", Cause: permanent}},
+		{name: "joined permanent", err: errors.Join(errors.New("retry"), permanent)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.retry, CanRetry(tc.err))
+			encoded, err := json.Marshal(FromError(tc.err))
+			require.NoError(t, err)
+			var restored *Error
+			require.NoError(t, json.Unmarshal(encoded, &restored))
+			require.Equal(t, tc.retry, CanRetry(ToError(restored)))
+		})
+	}
+	require.Nil(t, NewPermanentError(nil))
+}
 
 func Test_NewError_Nil(t *testing.T) {
 	err := FromError(nil)

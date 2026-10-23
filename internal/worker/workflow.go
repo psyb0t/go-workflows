@@ -7,18 +7,21 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
-	im "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
-	"github.com/cschleiden/go-workflows/workflow/executor/cache"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
+	im "github.com/psyb0t/go-workflows/internal/metrics"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/workflow/executor"
+	"github.com/psyb0t/go-workflows/workflow/executor/cache"
 )
 
 type WorkflowWorkerOptions struct {
@@ -61,7 +64,7 @@ func (wtw *WorkflowTaskWorker) Start(ctx context.Context, queues []workflow.Queu
 	}
 
 	if err := wtw.backend.PrepareWorkflowQueues(ctx, queues); err != nil {
-		return fmt.Errorf("preparing workflow queues: %w", err)
+		return ctxerrors.Wrap(err, "preparing workflow queues")
 	}
 
 	return nil
@@ -98,7 +101,7 @@ func (wtw *WorkflowTaskWorker) Complete(ctx context.Context, result *executor.Ex
 	if err := wtw.backend.CompleteWorkflowTask(
 		ctx, t, state, result.Executed, result.ActivityEvents, result.TimerEvents, result.WorkflowEvents); err != nil {
 		logger.ErrorContext(ctx, "could not complete workflow task", "error", err)
-		return fmt.Errorf("completing workflow task: %w", err)
+		return ctxerrors.Wrap(err, "completing workflow task")
 	}
 
 	return nil
@@ -128,12 +131,12 @@ func (wtw *WorkflowTaskWorker) Execute(ctx context.Context, t *backend.WorkflowT
 
 	executor, err := wtw.getExecutor(ctx, t)
 	if err != nil {
-		return nil, fmt.Errorf("getting executor: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting executor")
 	}
 
 	result, err := executor.ExecuteTask(ctx, t)
 	if err != nil {
-		return nil, fmt.Errorf("executing task: %w", err)
+		return nil, ctxerrors.Wrap(err, "executing task")
 	}
 
 	// Only record the time spent in the workflow code
@@ -153,7 +156,11 @@ func (wtw *WorkflowTaskWorker) Get(ctx context.Context, queues []workflow.Queue)
 			return nil, nil
 		}
 
-		return nil, err
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "execute workflow")
+		}
+
+		return nil, nil
 	}
 
 	return t, nil
@@ -183,7 +190,7 @@ func (wtw *WorkflowTaskWorker) getExecutor(ctx context.Context, t *backend.Workf
 			wtw.backend.Options().MaxHistorySize,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("creating workflow task executor: %w", err)
+			return nil, ctxerrors.Wrap(err, "creating workflow task executor")
 		}
 	}
 

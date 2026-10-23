@@ -1,0 +1,24 @@
+FROM golang:1.26.10-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba
+
+COPY --from=hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d /bin/hadolint /usr/local/bin/hadolint
+COPY --from=aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222 /usr/local/bin/trivy /usr/local/bin/trivy
+
+RUN apk add --no-cache \
+    bash=5.3.9-r1 \
+    ca-certificates=20261020-r0 \
+    coreutils=9.11-r0 \
+    gcc=15.2.0-r5 \
+    git=2.54.0-r0 \
+    jq=1.8.2-r0 \
+    musl-dev=1.2.6-r3 \
+    shellcheck=0.11.0-r1 \
+    shfmt=3.13.1-r3
+
+ENV GOPROXY=https://proxy.golang.org,direct \
+    GOSUMDB=sum.golang.org \
+    GOTOOLCHAIN=local \
+    CGO_ENABLED=1
+
+WORKDIR /work
+USER 1000:1000
+CMD ["bash"]

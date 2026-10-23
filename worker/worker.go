@@ -2,16 +2,18 @@ package worker
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/psyb0t/ctxerrors"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/internal/signals"
-	internal "github.com/cschleiden/go-workflows/internal/worker"
-	"github.com/cschleiden/go-workflows/internal/workflows"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/internal/signals"
+	internal "github.com/psyb0t/go-workflows/internal/worker"
+	"github.com/psyb0t/go-workflows/internal/workflows"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Worker struct {
@@ -59,15 +61,15 @@ func NewActivityWorker(backend backend.Backend, options *ActivityWorkerOptions) 
 func newWorker(backend backend.Backend, registry *registry.Registry, workers []worker) *Worker {
 	// Register system activites and workflows
 	if err := registry.RegisterActivity(&signals.Activities{Signaler: client.New(backend)}); err != nil {
-		panic(fmt.Errorf("registering internal activities: %w", err))
+		panic(ctxerrors.Wrap(err, "registering internal activities"))
 	}
 
 	if err := registry.RegisterActivity(&workflows.Activities{Backend: backend}); err != nil {
-		panic(fmt.Errorf("registering internal activities: %w", err))
+		panic(ctxerrors.Wrap(err, "registering internal activities"))
 	}
 
 	if err := registry.RegisterWorkflow(workflows.ExpireWorkflowInstances); err != nil {
-		panic(fmt.Errorf("registering internal workflow: %w", err))
+		panic(ctxerrors.Wrap(err, "registering internal workflow"))
 	}
 
 	return &Worker{
@@ -122,7 +124,7 @@ func newWorkflowWorker(backend backend.Backend, registry *registry.Registry, opt
 func (w *Worker) Start(ctx context.Context) error {
 	for _, worker := range w.workers {
 		if err := worker.Start(ctx); err != nil {
-			return fmt.Errorf("starting worker: %w", err)
+			return ctxerrors.Wrap(err, "starting worker")
 		}
 	}
 
@@ -133,7 +135,7 @@ func (w *Worker) Start(ctx context.Context) error {
 func (w *Worker) WaitForCompletion() error {
 	for _, worker := range w.workers {
 		if err := worker.WaitForCompletion(); err != nil {
-			return fmt.Errorf("waiting for worker completion: %w", err)
+			return ctxerrors.Wrap(err, "waiting for worker completion")
 		}
 	}
 

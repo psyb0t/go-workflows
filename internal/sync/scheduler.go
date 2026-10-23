@@ -1,5 +1,7 @@
 package sync
 
+import "github.com/psyb0t/ctxerrors"
+
 type Scheduler struct {
 	coroutines []Coroutine
 }
@@ -38,7 +40,10 @@ func (s *Scheduler) Execute() error {
 
 				if err := c.Error(); err != nil {
 					// Coroutine encountered an error, abort execution
-					return err
+					if err != nil {
+						return ctxerrors.Wrap(err, "execute scheduler")
+					}
+					return nil
 				}
 			} else {
 				// Determine if coroutine made any progress or if it stayed blocked

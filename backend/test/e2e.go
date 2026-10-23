@@ -2,22 +2,26 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/workflow/executor"
 )
 
 type backendTest struct {
@@ -28,8 +32,8 @@ type backendTest struct {
 	customWorkerOptions func(options *worker.Options)
 }
 
-func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOption) TestBackend, teardown func(b TestBackend)) {
-	tests := []backendTest{
+func basicEndToEndTests() []backendTest {
+	return []backendTest{
 		{
 			name: "SimpleWorkflow",
 			f: func(t *testing.T, ctx context.Context, c *client.Client, w *worker.Worker, b TestBackend) {
@@ -187,7 +191,9 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					}).Get(ctx)
 
 					// Do something to force the task to end
-					workflow.Sleep(ctx, time.Millisecond*1)
+					if err := workflow.Sleep(ctx, time.Millisecond*1); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					r2, _ := workflow.SideEffect(ctx, func(ctx workflow.Context) int {
 						i++
@@ -231,7 +237,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 				wf := func(ctx workflow.Context) (int, error) {
 					r, err := workflow.CreateSubWorkflowInstance[int](ctx, workflow.DefaultSubWorkflowOptions, swf, 1).Get(ctx)
 					if err != nil {
-						return 0, err
+						return 0, ctxerrors.Wrap(err, "execute e2e")
 					}
 
 					return r, nil
@@ -262,8 +268,12 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 						rctx := workflow.NewDisconnectedContext(ctx)
 
 						// Unblock waiting sub workflow
-						workflow.SignalWorkflow[any](rctx, "subworkflow", "signal", 1).Get(rctx)
-						swf1.Get(rctx)
+						if _, err := workflow.SignalWorkflow[any](rctx, "subworkflow", "signal", 1).Get(rctx); err != nil {
+							t.Errorf("unexpected operation error: %v", err)
+						}
+						if _, err := swf1.Get(rctx); err != nil {
+							t.Errorf("unexpected operation error: %v", err)
+						}
 					}()
 
 					// Run another subworkflow with the same ID
@@ -271,7 +281,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 						InstanceID: "subworkflow",
 					}, swf, 1).Get(ctx)
 					if err != nil {
-						return 0, err
+						return 0, ctxerrors.Wrap(err, "execute e2e")
 					}
 
 					return r, nil
@@ -296,7 +306,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 						InstanceID: "subworkflow",
 					}, swf, 1).Get(ctx)
 					if err != nil {
-						return 0, err
+						return 0, ctxerrors.Wrap(err, "execute e2e")
 					}
 
 					// Run another subworkflow with the same ID
@@ -304,7 +314,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 						InstanceID: "subworkflow",
 					}, swf, 2).Get(ctx)
 					if err != nil {
-						return 0, err
+						return 0, ctxerrors.Wrap(err, "execute e2e")
 					}
 
 					return r, nil
@@ -325,12 +335,15 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 
 				swf := func(ctx workflow.Context, i int) (int, error) {
 					// Sleep in this sub workflow, we expect the subworkflow to be canceled, so this timer will not complete.
-					if err := workflow.Sleep(ctx, time.Second*10); err != nil && err != workflow.Canceled {
+					if err := workflow.Sleep(ctx, time.Second*10); err != nil && !errors.Is(err, workflow.Canceled) {
 						// This should not happen
-						return 0, err
+						if err != nil {
+							return 0, ctxerrors.Wrap(err, "execute e2e")
+						}
+						return 0, nil
 					}
 
-					if ctx.Err() != nil && ctx.Err() == workflow.Canceled {
+					if ctx.Err() != nil && errors.Is(ctx.Err(), workflow.Canceled) {
 						atomic.AddInt32(&canceled, 1)
 					}
 
@@ -341,7 +354,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 				ch := make(chan struct{}, 10)
 
 				wf := func(ctx workflow.Context) (int, error) {
-					swfs := make([]workflow.Future[int], 0)
+					swfs := make([]workflow.Future[int], 0, 2)
 
 					swfs = append(swfs, workflow.CreateSubWorkflowInstance[int](ctx, workflow.DefaultSubWorkflowOptions, swf, 1))
 					swfs = append(swfs, workflow.CreateSubWorkflowInstance[int](ctx, workflow.DefaultSubWorkflowOptions, swf, 2))
@@ -354,14 +367,17 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 
 					for _, f := range swfs {
 						sr, err := f.Get(ctx)
-						if err != nil && err != workflow.Canceled {
-							return 0, err
+						if err != nil && !errors.Is(err, workflow.Canceled) {
+							if err != nil {
+								return 0, ctxerrors.Wrap(err, "execute e2e")
+							}
+							return 0, nil
 						}
 
 						r = r + sr
 					}
 
-					if ctx.Err() != nil && ctx.Err() == workflow.Canceled {
+					if ctx.Err() != nil && errors.Is(ctx.Err(), workflow.Canceled) {
 						atomic.AddInt32(&canceled, 1)
 					}
 
@@ -403,11 +419,16 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					cancel()
 
 					// Force the checkpoint before continuing the execution
-					workflow.Sleep(ctx, time.Millisecond*2)
+					if err := workflow.Sleep(ctx, time.Millisecond*2); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					r, err := f.Get(ctx)
-					if err != nil && err != workflow.Canceled {
-						return 0, err
+					if err != nil && !errors.Is(err, workflow.Canceled) {
+						if err != nil {
+							return 0, ctxerrors.Wrap(err, "execute e2e")
+						}
+						return 0, nil
 					}
 
 					return r, nil
@@ -425,7 +446,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 				})
 
 				require.Error(t, err)
-				require.Equal(t, backend.ErrInstanceNotFound, err)
+				require.ErrorIs(t, err, backend.ErrInstanceNotFound)
 			},
 		},
 		{
@@ -448,7 +469,10 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					}, swf, 1)
 
 					if _, err := workflow.SignalWorkflow(ctx, id, "signal", "hello").Get(ctx); err != nil {
-						return 0, err
+						if err != nil {
+							return 0, ctxerrors.Wrap(err, "execute e2e")
+						}
+						return 0, nil
 					}
 
 					return f.Get(ctx)
@@ -487,7 +511,10 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					}, swf, 1)
 
 					if _, err := workflow.SignalWorkflow(ctx, id, "signal", "hello").Get(ctx); err != nil {
-						return 0, err
+						if err != nil {
+							return 0, ctxerrors.Wrap(err, "execute e2e")
+						}
+						return 0, nil
 					}
 
 					return f.Get(ctx)
@@ -512,7 +539,10 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					}).Get(ctx)
 
 					if _, err := workflow.SignalWorkflow(ctx, id, "signal", "hello").Get(ctx); err != nil {
-						return 0, err
+						if err != nil {
+							return 0, ctxerrors.Wrap(err, "execute e2e")
+						}
+						return 0, nil
 					}
 
 					return 42, nil
@@ -539,11 +569,15 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 							return 1
 						}).Get(ctx)
 					} else {
-						workflow.Sleep(ctx, time.Millisecond*1)
+						if err := workflow.Sleep(ctx, time.Millisecond*1); err != nil {
+							t.Errorf("unexpected operation error: %v", err)
+						}
 					}
 
 					// Do something to force the task to end
-					workflow.Sleep(ctx, time.Millisecond*1)
+					if err := workflow.Sleep(ctx, time.Millisecond*1); err != nil {
+						t.Errorf("unexpected operation error: %v", err)
+					}
 
 					return r, nil
 				}
@@ -596,7 +630,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 
 					ar, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
 					if err != nil {
-						return "", err
+						return "", ctxerrors.Wrap(err, "execute e2e")
 					}
 
 					return fmt.Sprintf("%s-%d", d.Name, ar), nil
@@ -627,7 +661,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 					for i := 0; i < 10; i++ {
 						_, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
 						if err != nil {
-							return 0, err
+							return 0, ctxerrors.Wrap(err, "execute e2e")
 						}
 					}
 
@@ -638,11 +672,16 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 				instance := runWorkflow(t, ctx, c, wf)
 				_, err := client.GetWorkflowResult[int](ctx, c, instance, time.Second*5)
 				require.Error(t, err)
-				require.EqualError(t, err, "workflow history size exceeded 2 events")
+				require.ErrorContains(t, err, "workflow history size exceeded 2 events")
 			},
 		},
 	}
+}
 
+func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOption) TestBackend, teardown func(b TestBackend)) {
+	basicTests := basicEndToEndTests()
+	tests := make([]backendTest, 0, len(basicTests)+len(e2eActivityTests)+len(e2eTimerTests)+len(e2eStatsTests)+len(e2eDiagTests)+len(e2eQueueTests)+len(e2eRemovalTests)+len(e2eContinueAsNewTests)+len(e2eTracingTests))
+	tests = append(tests, basicTests...)
 	tests = append(tests, e2eActivityTests...)
 	tests = append(tests, e2eTimerTests...)
 	tests = append(tests, e2eStatsTests...)
@@ -651,6 +690,8 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 	tests = append(tests, e2eRemovalTests...)
 	tests = append(tests, e2eContinueAsNewTests...)
 	tests = append(tests, e2eTracingTests...)
+	tests = append(tests, e2eScopeTests...)
+	tests = append(tests, failureIdentityTests()...)
 
 	run := func(suffix string, workerOptions worker.Options) {
 		for _, tt := range tests {
@@ -701,8 +742,7 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 	run("_without_cache", options)
 }
 
-type noopWorkflowExecutorCache struct {
-}
+type noopWorkflowExecutorCache struct{}
 
 var _ executor.Cache = (*noopWorkflowExecutorCache)(nil)
 

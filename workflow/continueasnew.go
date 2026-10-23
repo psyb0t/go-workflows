@@ -1,12 +1,12 @@
 package workflow
 
 import (
-	"fmt"
+	"github.com/psyb0t/ctxerrors"
 
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/continueasnew"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	a "github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/continueasnew"
 )
 
 // ContinueAsNew restarts the current workflow with the given arguments.
@@ -15,13 +15,13 @@ func ContinueAsNew(ctx Context, args ...any) error {
 	propagators := propagators(ctx)
 	metadata := &metadata.WorkflowMetadata{}
 	if err := injectFromWorkflow(ctx, metadata, propagators); err != nil {
-		return fmt.Errorf("injecting workflow context: %w", err)
+		return ctxerrors.Wrap(err, "injecting workflow context")
 	}
 
 	cv := contextvalue.Converter(ctx)
 	inputs, err := a.ArgsToInputs(cv, args...)
 	if err != nil {
-		return fmt.Errorf("converting inputs for continuing workflow execution: %w", err)
+		return ctxerrors.Wrap(err, "converting inputs for continuing workflow execution")
 	}
 
 	return continueasnew.NewError(metadata, inputs)

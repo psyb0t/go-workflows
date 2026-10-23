@@ -4,7 +4,9 @@ import (
 	"context"
 	"math/rand"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type MidInput struct {
@@ -20,7 +22,7 @@ func waitAll[T any](ctx workflow.Context, futures []workflow.Future[T]) error {
 	for _, f := range futures {
 		_, err := f.Get(ctx)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute workflows")
 		}
 	}
 
@@ -107,7 +109,7 @@ func randSeq(n int) string {
 
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = alphabet[rand.Intn(len(alphabet))]
+		b[i] = alphabet[rand.Intn(len(alphabet))] // #nosec G404 -- Reproducible benchmark payload, not a credential or nonce.
 	}
 	return string(b)
 }

@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 var e2eStatsTests = []backendTest{
@@ -35,11 +36,15 @@ var e2eStatsTests = []backendTest{
 				return nil
 			}
 			wf := func(ctx workflow.Context) (bool, error) {
-				workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx)
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, a).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
-				workflow.ExecuteActivity[any](ctx, workflow.ActivityOptions{
+				if _, err := workflow.ExecuteActivity[any](ctx, workflow.ActivityOptions{
 					Queue: "custom",
-				}, a2).Get(ctx)
+				}, a2).Get(ctx); err != nil {
+					t.Errorf("unexpected operation error: %v", err)
+				}
 
 				workflow.NewSignalChannel[any](ctx, "test-signal").Receive(ctx)
 

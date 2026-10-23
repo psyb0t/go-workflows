@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_SubWorkflow(t *testing.T) {
@@ -33,7 +34,9 @@ func Test_SubWorkflow(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](workflowWithSub)
-	tester.Registry().RegisterWorkflow(subWorkflow)
+	if err := tester.Registry().RegisterWorkflow(subWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background(), "hello")
 
@@ -64,7 +67,9 @@ func Test_SubWorkflow_Mocked(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](workflow)
-	tester.Registry().RegisterWorkflow(subWorkflow)
+	if err := tester.Registry().RegisterWorkflow(subWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 	tester.OnSubWorkflow(subWorkflow, mock.Anything, mock.Anything).Return("sresult2", nil)
 
 	tester.Execute(context.Background(), "hello")
@@ -96,7 +101,9 @@ func Test_SubWorkflow_Mocked_Failure(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](workflow)
-	tester.Registry().RegisterWorkflow(subWorkflow)
+	if err := tester.Registry().RegisterWorkflow(subWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 	tester.OnSubWorkflow(subWorkflow, mock.Anything, mock.Anything).Return(nil, errors.New("swf error"))
 
 	tester.Execute(context.Background(), "hello")
@@ -105,7 +112,7 @@ func Test_SubWorkflow_Mocked_Failure(t *testing.T) {
 
 	wfR, wfE := tester.WorkflowResult()
 	require.Empty(t, wfR)
-	require.EqualError(t, wfE, "swf error")
+	require.ErrorContains(t, wfE, "swf error")
 
 	tester.AssertExpectations(t)
 }
@@ -130,7 +137,9 @@ func Test_SubWorkflow_Cancel(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](workflowWithSub)
-	tester.Registry().RegisterWorkflow(subWorkflow)
+	if err := tester.Registry().RegisterWorkflow(subWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	var subWorkflowInstance *core.WorkflowInstance
 
@@ -147,7 +156,7 @@ func Test_SubWorkflow_Cancel(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "subworkflow: context canceled")
+	require.ErrorContains(t, err, "subworkflow: context canceled")
 	tester.AssertExpectations(t)
 }
 
@@ -174,7 +183,9 @@ func Test_SubWorkflow_Signals(t *testing.T) {
 	}
 
 	tester := NewWorkflowTester[string](workflowWithSub)
-	tester.Registry().RegisterWorkflow(subWorkflow)
+	if err := tester.Registry().RegisterWorkflow(subWorkflow); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	var subWorkflowInstance *core.WorkflowInstance
 

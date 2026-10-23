@@ -1,16 +1,18 @@
 package executor
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
 
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
 )
 
 type workflow struct {
@@ -34,11 +36,11 @@ func (w *workflow) Execute(ctx sync.Context, inputs []payload.Payload) error {
 		converter := contextvalue.Converter(ctx)
 		args, addContext, err := args.InputsToArgs(converter, w.fn, inputs)
 		if err != nil {
-			return fmt.Errorf("converting workflow inputs: %w", err)
+			return ctxerrors.Wrap(err, "converting workflow inputs")
 		}
 
 		if !addContext {
-			return errors.New("workflow must accept context as first argument")
+			return ctxerrors.Wrap(commerr.ErrInvalidArgument, "workflow must accept context as first argument")
 		}
 
 		args[0] = reflect.ValueOf(ctx)
@@ -57,7 +59,7 @@ func (w *workflow) Execute(ctx sync.Context, inputs []payload.Payload) error {
 
 		// Process result
 		if len(r) < 1 || len(r) > 2 {
-			return errors.New("workflow has to return either (error) or (result, error)")
+			return ctxerrors.Wrap(commerr.ErrInvalidArgument, "workflow has to return either (error) or (result, error)")
 		}
 
 		var result payload.Payload
@@ -66,12 +68,12 @@ func (w *workflow) Execute(ctx sync.Context, inputs []payload.Payload) error {
 			var err error
 			result, err = converter.To(r[0].Interface())
 			if err != nil {
-				return fmt.Errorf("converting workflow result: %w", err)
+				return ctxerrors.Wrap(err, "converting workflow result")
 			}
 		} else {
 			result, err = converter.To(nil)
 			if err != nil {
-				return fmt.Errorf("converting workflow result: %w", err)
+				return ctxerrors.Wrap(err, "converting workflow result")
 			}
 		}
 
@@ -81,7 +83,7 @@ func (w *workflow) Execute(ctx sync.Context, inputs []payload.Payload) error {
 		if !errResult.IsNil() {
 			errInterface, ok := errResult.Interface().(error)
 			if !ok {
-				return fmt.Errorf("workflow error result does not satisfy error interface (%T): %v", errResult, errResult)
+				return ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow error result does not satisfy error interface (%T): %v", errResult, errResult)
 			}
 
 			w.err = errInterface

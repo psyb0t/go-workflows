@@ -6,10 +6,12 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type monoprocessBackend struct {
@@ -47,7 +49,10 @@ func (b *monoprocessBackend) GetWorkflowTask(ctx context.Context, queues []workf
 	// loop until either we find a task or the context is cancelled
 	for {
 		if w, err := b.Backend.GetWorkflowTask(ctx, queues); w != nil || err != nil {
-			return w, err
+			if err != nil {
+				return w, ctxerrors.Wrap(err, "execute monoprocess")
+			}
+			return w, nil
 		}
 		b.logger.DebugContext(ctx, "worker waiting for workflow task signal")
 		select {
@@ -63,7 +68,10 @@ func (b *monoprocessBackend) GetActivityTask(ctx context.Context, queues []workf
 	// loop until either we find a task or the context is cancelled
 	for {
 		if a, err := b.Backend.GetActivityTask(ctx, queues); a != nil || err != nil {
-			return a, err
+			if err != nil {
+				return a, ctxerrors.Wrap(err, "execute monoprocess")
+			}
+			return a, nil
 		}
 		b.logger.DebugContext(ctx, "worker waiting for activity task signal")
 		select {
@@ -77,7 +85,7 @@ func (b *monoprocessBackend) GetActivityTask(ctx context.Context, queues []workf
 
 func (b *monoprocessBackend) CreateWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error {
 	if err := b.Backend.CreateWorkflowInstance(ctx, instance, event); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute monoprocess")
 	}
 	b.notifyWorkflowWorker(ctx)
 	return nil
@@ -91,7 +99,7 @@ func (b *monoprocessBackend) CompleteWorkflowTask(
 	workflowEvents []*history.WorkflowEvent,
 ) error {
 	if err := b.Backend.CompleteWorkflowTask(ctx, task, state, executedEvents, activityEvents, timerEvents, workflowEvents); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute monoprocess")
 	}
 
 	if len(activityEvents) > 0 {
@@ -119,7 +127,7 @@ func (b *monoprocessBackend) CompleteWorkflowTask(
 
 func (b *monoprocessBackend) CompleteActivityTask(ctx context.Context, task *backend.ActivityTask, result *history.Event) error {
 	if err := b.Backend.CompleteActivityTask(ctx, task, result); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute monoprocess")
 	}
 	b.notifyWorkflowWorker(ctx)
 	return nil
@@ -127,7 +135,7 @@ func (b *monoprocessBackend) CompleteActivityTask(ctx context.Context, task *bac
 
 func (b *monoprocessBackend) CancelWorkflowInstance(ctx context.Context, instance *workflow.Instance, cancelEvent *history.Event) error {
 	if err := b.Backend.CancelWorkflowInstance(ctx, instance, cancelEvent); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute monoprocess")
 	}
 	b.notifyWorkflowWorker(ctx)
 	return nil
@@ -135,7 +143,7 @@ func (b *monoprocessBackend) CancelWorkflowInstance(ctx context.Context, instanc
 
 func (b *monoprocessBackend) SignalWorkflow(ctx context.Context, instanceID string, event *history.Event) error {
 	if err := b.Backend.SignalWorkflow(ctx, instanceID, event); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute monoprocess")
 	}
 	b.notifyWorkflowWorker(ctx)
 	return nil

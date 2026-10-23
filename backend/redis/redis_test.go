@@ -8,17 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/test"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/test"
+	"github.com/psyb0t/go-workflows/tests/testinfra"
 )
 
-const (
-	address  = "localhost:6379"
-	user     = ""
-	password = "RedisPassw0rd"
-)
+var testInfra *testinfra.Infra
+
+func TestMain(m *testing.M) {
+	testinfra.Exit(m, testinfra.Redis, &testInfra)
+}
 
 func Test_RedisBackend(t *testing.T) {
 	if testing.Short() {
@@ -44,9 +46,9 @@ func Test_EndToEndRedisBackend(t *testing.T) {
 
 func getClient() redis.UniversalClient {
 	client := redis.NewUniversalClient(&redis.UniversalOptions{
-		Addrs:    []string{address},
-		Username: user,
-		Password: password,
+		Addrs:    []string{testInfra.Address()},
+		Username: testInfra.User,
+		Password: testInfra.Password,
 		DB:       0,
 	})
 
@@ -69,11 +71,8 @@ func getCreateBackend(client redis.UniversalClient, additionalOptions ...RedisBa
 			panic("Keys should've been empty" + strings.Join(r, ", "))
 		}
 
-		redisOptions := []RedisBackendOption{
-			WithBlockTimeout(time.Millisecond * 10),
-			WithBackendOptions(options...),
-		}
-
+		redisOptions := make([]RedisBackendOption, 0, 2+len(additionalOptions))
+		redisOptions = append(redisOptions, WithBlockTimeout(time.Millisecond*10), WithBackendOptions(options...))
 		redisOptions = append(redisOptions, additionalOptions...)
 
 		b, err := NewRedisBackend(client, redisOptions...)
@@ -93,7 +92,6 @@ func (rb *redisBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 		Min: "-inf",
 		Max: "+inf",
 	}).Result()
-
 	if err != nil {
 		return nil, fmt.Errorf("getting future events: %w", err)
 	}

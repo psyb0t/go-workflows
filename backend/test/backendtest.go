@@ -6,16 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) TestBackend, teardown func(b TestBackend)) {
@@ -108,7 +109,7 @@ func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) Test
 
 				err = b.RemoveWorkflowInstance(ctx, wfi)
 				require.Error(t, err)
-				require.Equal(t, backend.ErrInstanceNotFinished, err)
+				require.ErrorIs(t, err, backend.ErrInstanceNotFinished)
 			},
 		},
 		{
@@ -119,7 +120,7 @@ func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) Test
 
 				err := b.RemoveWorkflowInstance(ctx, wfi)
 				require.Error(t, err)
-				require.Equal(t, backend.ErrInstanceNotFound, err)
+				require.ErrorIs(t, err, backend.ErrInstanceNotFound)
 			},
 		},
 		{
@@ -390,7 +391,7 @@ func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) Test
 				c := client.New(b)
 				err := c.SignalWorkflow(ctx, "does-not-exist", "signal", "value")
 				require.Error(t, err)
-				require.Equal(t, backend.ErrInstanceNotFound, err)
+				require.ErrorIs(t, err, backend.ErrInstanceNotFound)
 			},
 		},
 		{
@@ -399,7 +400,7 @@ func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) Test
 				c := client.New(b)
 				err := c.CancelWorkflowInstance(ctx, core.NewWorkflowInstance(uuid.NewString(), uuid.NewString()))
 				require.Error(t, err)
-				require.Equal(t, backend.ErrInstanceNotFound, err)
+				require.ErrorIs(t, err, backend.ErrInstanceNotFound)
 			},
 		},
 		{

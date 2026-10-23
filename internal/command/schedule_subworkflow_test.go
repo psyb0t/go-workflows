@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func TestScheduleSubWorkflowCommand_StateTransitions(t *testing.T) {
@@ -79,14 +80,14 @@ func TestScheduleSubWorkflowCommand_StateTransitions(t *testing.T) {
 		{"Invalid_HandleCancel", func(t *testing.T, c *ScheduleSubWorkflowCommand, clock clock.Clock) {
 			c.Commit()
 
-			require.PanicsWithError(t, "invalid state transition for command ScheduleSubWorkflow: Committed -> Canceled", func() {
+			assertInvalidStatePanic(t, "invalid state transition for command ScheduleSubWorkflow: Committed -> Canceled", func() {
 				c.HandleCancel()
 			})
 		}},
 		{"Invalid_Commit", func(t *testing.T, c *ScheduleSubWorkflowCommand, clock clock.Clock) {
 			c.Cancel()
 
-			require.PanicsWithError(t, "invalid state transition for command ScheduleSubWorkflow: Canceled -> Committed", func() {
+			assertInvalidStatePanic(t, "invalid state transition for command ScheduleSubWorkflow: Canceled -> Committed", func() {
 				c.Commit()
 			})
 		}},

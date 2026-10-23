@@ -1,11 +1,13 @@
 package command
 
 import (
-	"fmt"
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 type Command interface {
@@ -86,5 +88,5 @@ func (c *command) WhenDone(fn func()) {
 }
 
 func (c *command) invalidStateTransition(state CommandState) {
-	panic(fmt.Errorf("invalid state transition for command %s: %s -> %s", c.name, c.State().String(), state.String()))
+	panic(ctxerrors.Wrapf(commerr.ErrInvalidState, "invalid state transition for command %s: %s -> %s", c.name, c.State().String(), state.String()))
 }

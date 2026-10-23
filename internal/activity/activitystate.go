@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type ActivityState struct {
@@ -25,7 +25,8 @@ func NewActivityState(activityID string, attempt int, instance *workflow.Instanc
 			log.InstanceIDKey, instance.InstanceID,
 			log.ExecutionIDKey, instance.ExecutionID,
 			log.AttemptKey, attempt,
-		)}
+		),
+	}
 }
 
 type key int

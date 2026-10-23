@@ -7,10 +7,10 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/samples"
-	scale "github.com/cschleiden/go-workflows/samples/scale"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/samples"
+	scale "github.com/psyb0t/go-workflows/samples/scale"
+	"github.com/psyb0t/go-workflows/worker"
 )
 
 func main() {
@@ -43,10 +43,16 @@ func RunWorker(ctx context.Context, mb backend.Backend) {
 		},
 	})
 
-	w.RegisterWorkflow(scale.Workflow1)
+	if err := w.RegisterWorkflow(scale.Workflow1); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(scale.Activity1)
-	w.RegisterActivity(scale.Activity2)
+	if err := w.RegisterActivity(scale.Activity1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterActivity(scale.Activity2); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

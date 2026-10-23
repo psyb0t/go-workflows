@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_Workflow(t *testing.T) {
@@ -38,7 +39,9 @@ func Test_WorkflowBlocked(t *testing.T) {
 
 func workflowBlocked(ctx workflow.Context) error {
 	f := sync.NewFuture[int]()
-	f.Get(ctx)
+	if _, err := f.Get(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -79,7 +82,7 @@ func Test_FailingActivity(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 	wr, werr := tester.WorkflowResult()
 	require.Equal(t, 0, wr)
-	require.EqualError(t, werr, "error")
+	require.ErrorContains(t, werr, "error")
 	tester.AssertExpectations(t)
 }
 
@@ -112,7 +115,9 @@ func Test_Activity_Retries(t *testing.T) {
 func Test_Activity_WithoutMock(t *testing.T) {
 	tester := NewWorkflowTester[int](workflowWithActivity)
 
-	tester.Registry().RegisterActivity(activity1)
+	if err := tester.Registry().RegisterActivity(activity1); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 
@@ -142,7 +147,9 @@ func activity1(ctx context.Context) (int, error) {
 
 func Test_Activity_LongRunning(t *testing.T) {
 	tester := NewWorkflowTester[any](workflowLongRunningActivity)
-	tester.Registry().RegisterActivity(activityLongRunning)
+	if err := tester.Registry().RegisterActivity(activityLongRunning); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background())
 
@@ -150,7 +157,9 @@ func Test_Activity_LongRunning(t *testing.T) {
 }
 
 func workflowLongRunningActivity(ctx workflow.Context) error {
-	workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, activityLongRunning).Get(ctx)
+	if _, err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, activityLongRunning).Get(ctx); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -174,7 +183,7 @@ func Test_CancelWorkflow(t *testing.T) {
 
 	require.True(t, tester.WorkflowFinished())
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "context canceled")
+	require.ErrorContains(t, err, workflow.Canceled.Error())
 }
 
 func Test_Signals(t *testing.T) {
@@ -216,13 +225,13 @@ func Test_SignalSubWorkflowBeforeScheduling(t *testing.T) {
 
 	require.True(t, tester.WorkflowFinished())
 	wfR, wfErr := tester.WorkflowResult()
-	require.EqualError(t, wfErr, backend.ErrInstanceNotFound.Error())
+	require.ErrorContains(t, wfErr, backend.ErrInstanceNotFound.Error())
 	require.IsType(t, "", wfR)
 }
 
 func workflowSubWorkFlowsAndSignals(ctx workflow.Context) (string, error) {
 	_, err := workflow.SignalWorkflow(ctx, "subworkflow", "test", "").Get(ctx)
-	if err != backend.ErrInstanceNotFound {
+	if !errors.Is(err, backend.ErrInstanceNotFound) {
 		return "", err
 	}
 

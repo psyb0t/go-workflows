@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type myKey int
@@ -32,8 +34,7 @@ func myValuesWf(ctx workflow.Context) *myData {
 	return ctx.Value(k).(*myData)
 }
 
-type testContextPropagator struct {
-}
+type testContextPropagator struct{}
 
 var _ workflow.ContextPropagator = &testContextPropagator{}
 
@@ -43,7 +44,7 @@ func (*testContextPropagator) Extract(ctx context.Context, metadata *workflow.Me
 
 	var d *myData
 	if err := json.Unmarshal([]byte(ms), &d); err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute testcontextpropagator")
 	}
 
 	return withMyValues(ctx, d), nil
@@ -55,7 +56,7 @@ func (*testContextPropagator) ExtractToWorkflow(ctx workflow.Context, metadata *
 
 	var d *myData
 	if err := json.Unmarshal([]byte(ms), &d); err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute testcontextpropagator")
 	}
 
 	return withMyValuesWf(ctx, d), nil
@@ -66,7 +67,7 @@ func (*testContextPropagator) Inject(ctx context.Context, metadata *workflow.Met
 	d := myValues(ctx)
 	b, err := json.Marshal(d)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute testcontextpropagator")
 	}
 
 	metadata.Set("mydata", string(b))
@@ -79,7 +80,7 @@ func (*testContextPropagator) InjectFromWorkflow(ctx workflow.Context, metadata 
 	d := myValuesWf(ctx)
 	b, err := json.Marshal(d)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute testcontextpropagator")
 	}
 
 	metadata.Set("mydata", string(b))

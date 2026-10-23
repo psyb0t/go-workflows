@@ -2,10 +2,12 @@ package sync
 
 import (
 	"errors"
-	"fmt"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 )
 
 const DeadlockDetection = 40 * time.Second
@@ -75,7 +77,7 @@ func NewCoroutine(ctx Context, fn func(ctx Context) error) Coroutine {
 					return
 				}
 
-				s.err = fmt.Errorf("panic: %v", r)
+				s.err = ctxerrors.Wrapf(commerr.ErrInvalidState, "panic: %v", r)
 			}
 		}()
 

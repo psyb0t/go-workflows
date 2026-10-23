@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/diag"
 )
 
 var _ diag.Backend = (*sqliteBackend)(nil)
@@ -17,9 +21,9 @@ func (sb *sqliteBackend) GetWorkflowInstances(ctx context.Context, afterInstance
 		ReadOnly: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	var rows *sql.Rows
 	if afterInstanceID != "" {
@@ -46,13 +50,13 @@ func (sb *sqliteBackend) GetWorkflowInstances(ctx context.Context, afterInstance
 		)
 	}
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
 	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 
-	defer rows.Close()
+	defer cleanup.Close(ctx, rows)
 
 	var instances []*diag.WorkflowInstanceRef
 
@@ -64,7 +68,7 @@ func (sb *sqliteBackend) GetWorkflowInstances(ctx context.Context, afterInstance
 		var completedAt *time.Time
 		err = rows.Scan(&id, &executionID, &parentID, &parentExecutionID, &parentScheduleEventID, &createdAt, &completedAt, &queue)
 		if err != nil {
-			return nil, err
+			return nil, ctxerrors.Wrap(err, "execute diagnostics")
 		}
 
 		var state core.WorkflowInstanceState
@@ -89,7 +93,9 @@ func (sb *sqliteBackend) GetWorkflowInstances(ctx context.Context, afterInstance
 		})
 	}
 
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
+	}
 
 	return instances, nil
 }
@@ -99,9 +105,9 @@ func (sb *sqliteBackend) GetWorkflowInstance(ctx context.Context, instance *core
 		ReadOnly: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	res := tx.QueryRowContext(
 		ctx,
@@ -121,7 +127,11 @@ func (sb *sqliteBackend) GetWorkflowInstance(ctx context.Context, instance *core
 			return nil, nil
 		}
 
-		return nil, err
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "execute diagnostics")
+		}
+
+		return nil, nil
 	}
 
 	var state core.WorkflowInstanceState

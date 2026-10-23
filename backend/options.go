@@ -2,15 +2,18 @@ package backend
 
 import (
 	"log/slog"
+	"slices"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	mi "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/internal/propagators"
-	"github.com/cschleiden/go-workflows/workflow"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	workflowlog "github.com/psyb0t/go-workflows/internal/log"
+	mi "github.com/psyb0t/go-workflows/internal/metrics"
+	"github.com/psyb0t/go-workflows/internal/propagators"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Options struct {
@@ -56,12 +59,11 @@ var DefaultOptions Options = Options{
 	WorkflowLockTimeout: time.Minute,
 	ActivityLockTimeout: time.Minute * 2,
 
-	Logger:         slog.Default(),
 	Metrics:        mi.NewNoopMetricsClient(),
 	TracerProvider: noop.NewTracerProvider(),
 	Converter:      converter.DefaultConverter,
 
-	ContextPropagators: []workflow.ContextPropagator{&propagators.TracingContextPropagator{}},
+	ContextPropagators: []workflow.ContextPropagator{&propagators.TracingContextPropagator{}, &propagators.ScopeContextPropagator{}},
 
 	RemoveContinuedAsNewInstances: false,
 
@@ -162,6 +164,7 @@ func WithActivityLockTimeout(timeout time.Duration) BackendOption {
 
 func ApplyOptions(opts ...BackendOption) *Options {
 	options := DefaultOptions
+	options.ContextPropagators = slices.Clone(DefaultOptions.ContextPropagators)
 
 	for _, opt := range opts {
 		opt(&options)
@@ -170,6 +173,7 @@ func ApplyOptions(opts ...BackendOption) *Options {
 	if options.Logger == nil {
 		options.Logger = slog.Default()
 	}
+	options.Logger = workflowlog.ScopeLogger(options.Logger)
 
 	return &options
 }

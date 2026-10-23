@@ -8,11 +8,11 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
 
 	"github.com/google/uuid"
 )
@@ -30,7 +30,12 @@ func main() {
 	// Start diagnostic server under /diag
 	m := http.NewServeMux()
 	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(db)))
-	go http.ListenAndServe(":3000", m)
+	server := &http.Server{Addr: "127.0.0.1:3000", Handler: m, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("diagnostics server failed: %v", err)
+		}
+	}()
 
 	// Run worker
 	w := RunWorker(ctx, b)
@@ -74,10 +79,16 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(SubWorkflow)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

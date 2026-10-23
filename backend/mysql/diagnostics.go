@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/diag"
 )
 
 var _ diag.Backend = (*mysqlBackend)(nil)
@@ -15,9 +19,9 @@ func (mb *mysqlBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 	var err error
 	tx, err := mb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	var rows *sql.Rows
 	if afterInstanceID != "" {
@@ -44,10 +48,10 @@ func (mb *mysqlBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 		)
 	}
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
 
-	defer rows.Close()
+	defer cleanup.Close(ctx, rows)
 
 	var instances []*diag.WorkflowInstanceRef
 
@@ -59,7 +63,7 @@ func (mb *mysqlBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 		var completedAt *time.Time
 		err = rows.Scan(&id, &executionID, &parentID, &parentExecutionID, &parentScheduleEventID, &createdAt, &completedAt, &queue)
 		if err != nil {
-			return nil, err
+			return nil, ctxerrors.Wrap(err, "execute diagnostics")
 		}
 
 		var state core.WorkflowInstanceState
@@ -94,9 +98,9 @@ func (mb *mysqlBackend) GetWorkflowInstances(ctx context.Context, afterInstanceI
 func (mb *mysqlBackend) GetWorkflowInstance(ctx context.Context, instance *core.WorkflowInstance) (*diag.WorkflowInstanceRef, error) {
 	tx, err := mb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute diagnostics")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	res := tx.QueryRowContext(
 		ctx,
@@ -116,7 +120,11 @@ func (mb *mysqlBackend) GetWorkflowInstance(ctx context.Context, instance *core.
 			return nil, nil
 		}
 
-		return nil, err
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "execute diagnostics")
+		}
+
+		return nil, nil
 	}
 
 	var state core.WorkflowInstanceState

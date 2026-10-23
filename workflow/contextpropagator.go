@@ -3,7 +3,9 @@ package workflow
 import (
 	"context"
 
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/internal/contextvalue"
 )
 
 type ContextPropagator interface {
@@ -24,7 +26,7 @@ func injectFromWorkflow(ctx Context, metadata *Metadata, propagators []ContextPr
 	for _, propagator := range propagators {
 		err := propagator.InjectFromWorkflow(ctx, metadata)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute contextpropagator")
 		}
 	}
 

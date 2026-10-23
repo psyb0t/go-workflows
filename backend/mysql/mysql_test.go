@@ -7,14 +7,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/test"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/test"
+	"github.com/psyb0t/go-workflows/tests/testinfra"
 )
 
-const testUser = "root"
-const testPassword = "root"
+var testInfra *testinfra.Infra
+
+func TestMain(m *testing.M) {
+	testinfra.Exit(m, testinfra.MySQL, &testInfra)
+}
 
 // Creating and dropping databases is terribly inefficient, but easiest for complete test isolation. For
 // the future consider nested transactions, or manually TRUNCATE-ing the tables in-between tests.
@@ -27,7 +34,7 @@ func Test_MysqlBackend(t *testing.T) {
 	var dbName string
 
 	test.BackendTest(t, func(options ...backend.BackendOption) test.TestBackend {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		db, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			panic(err)
 		}
@@ -43,13 +50,13 @@ func Test_MysqlBackend(t *testing.T) {
 
 		options = append(options, backend.WithStickyTimeout(0))
 
-		return NewMysqlBackend("localhost", 3306, testUser, testPassword, dbName, WithBackendOptions(options...))
+		return NewMysqlBackend(testInfra.Host, testInfra.Port, testInfra.User, testInfra.Password, dbName, WithBackendOptions(options...))
 	}, func(b test.TestBackend) {
 		if err := b.(*mysqlBackend).db.Close(); err != nil {
 			panic(err)
 		}
 
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		db, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			panic(err)
 		}
@@ -72,7 +79,7 @@ func TestMySqlBackendE2E(t *testing.T) {
 	var dbName string
 
 	test.EndToEndBackendTest(t, func(options ...backend.BackendOption) test.TestBackend {
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		db, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			panic(err)
 		}
@@ -88,13 +95,13 @@ func TestMySqlBackendE2E(t *testing.T) {
 
 		options = append(options, backend.WithStickyTimeout(0))
 
-		return NewMysqlBackend("localhost", 3306, testUser, testPassword, dbName, WithBackendOptions(options...))
+		return NewMysqlBackend(testInfra.Host, testInfra.Port, testInfra.User, testInfra.Password, dbName, WithBackendOptions(options...))
 	}, func(b test.TestBackend) {
 		if err := b.(*mysqlBackend).db.Close(); err != nil {
 			panic(err)
 		}
 
-		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		db, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			panic(err)
 		}
@@ -116,7 +123,7 @@ func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// There is no index on `visible_at`, but this is okay for test only usage.
 	futureEvents, err := tx.QueryContext(
@@ -127,7 +134,7 @@ func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, 
 		return nil, fmt.Errorf("getting history: %w", err)
 	}
 
-	defer futureEvents.Close()
+	defer cleanup.Close(context.Background(), futureEvents)
 
 	f := make([]*history.Event, 0)
 
@@ -224,7 +231,7 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 
 	t.Run("UsesProvidedConnection", func(t *testing.T) {
 		// Create database for test
-		adminDB, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		adminDB, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -234,17 +241,21 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() {
-			adminDB.Exec("DROP DATABASE IF EXISTS " + dbName)
-			adminDB.Close()
+			if _, err := adminDB.Exec("DROP DATABASE IF EXISTS " + dbName); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
+			if err := adminDB.Close(); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 		}()
 
 		// Create our own connection to the test database
-		dsn := fmt.Sprintf("%s:%s@tcp(localhost:3306)/%s?parseTime=true&interpolateParams=true", testUser, testPassword, dbName)
+		dsn := testInfra.MySQLDSN(dbName)
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		// Create backend with existing connection and migration DSN
 		migrationDSN := dsn + "&multiStatements=true"
@@ -274,7 +285,7 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 
 	t.Run("MigrationsDisabledByDefault", func(t *testing.T) {
 		// Create database for test
-		adminDB, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		adminDB, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -284,20 +295,24 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() {
-			adminDB.Exec("DROP DATABASE IF EXISTS " + dbName)
-			adminDB.Close()
+			if _, err := adminDB.Exec("DROP DATABASE IF EXISTS " + dbName); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
+			if err := adminDB.Close(); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 		}()
 
-		dsn := fmt.Sprintf("%s:%s@tcp(localhost:3306)/%s?parseTime=true&interpolateParams=true", testUser, testPassword, dbName)
+		dsn := testInfra.MySQLDSN(dbName)
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		// Create backend without enabling migrations
 		backend := NewMysqlBackendWithDB(db)
-		defer backend.Close()
+		defer cleanup.Close(context.Background(), backend)
 
 		// Tables should not exist since migrations weren't applied
 		_, err = db.Exec("SELECT 1 FROM instances LIMIT 1")
@@ -308,7 +323,7 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 
 	t.Run("MigrationFailsWithoutDSN", func(t *testing.T) {
 		// Create database for test
-		adminDB, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/?parseTime=true&interpolateParams=true", testUser, testPassword))
+		adminDB, err := sql.Open("mysql", testInfra.MySQLDSN(""))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,16 +333,20 @@ func Test_MysqlBackendWithDB(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() {
-			adminDB.Exec("DROP DATABASE IF EXISTS " + dbName)
-			adminDB.Close()
+			if _, err := adminDB.Exec("DROP DATABASE IF EXISTS " + dbName); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
+			if err := adminDB.Close(); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 		}()
 
-		dsn := fmt.Sprintf("%s:%s@tcp(localhost:3306)/%s?parseTime=true&interpolateParams=true", testUser, testPassword, dbName)
+		dsn := testInfra.MySQLDSN(dbName)
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer db.Close()
+		defer cleanup.Close(context.Background(), db)
 
 		// Create backend without migration DSN - should panic when trying to migrate
 		defer func() {

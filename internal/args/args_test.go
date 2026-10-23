@@ -5,9 +5,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/payload"
+	"github.com/psyb0t/ctxerrors/commerr"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/payload"
 )
 
 func TestInputsToArgs(t *testing.T) {
@@ -59,7 +61,7 @@ func TestInputsToArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inputs := make([]payload.Payload, 0)
+			inputs := make([]payload.Payload, 0, len(tt.args.inputs))
 			for _, input := range tt.args.inputs {
 				p, err := converter.DefaultConverter.To(input)
 				require.NoError(t, err)
@@ -73,7 +75,8 @@ func TestInputsToArgs(t *testing.T) {
 				return
 			}
 			if tt.wantErr {
-				require.EqualError(t, err, tt.err)
+				require.ErrorIs(t, err, commerr.ErrInvalidArgument)
+				require.ErrorContains(t, err, tt.err)
 				require.Equal(t, tt.addContext, addContext)
 			}
 		})
@@ -141,7 +144,8 @@ func TestReturnTypeMatch(t *testing.T) {
 				require.NoError(t, got)
 			} else {
 				require.Error(t, got)
-				require.Equal(t, tt.want, got.Error())
+				require.ErrorIs(t, got, commerr.ErrInvalidArgument)
+				require.ErrorContains(t, got, tt.want)
 			}
 		})
 	}
@@ -222,7 +226,8 @@ func TestParamsMatch(t *testing.T) {
 				require.NoError(t, got)
 			} else {
 				require.Error(t, got)
-				require.Equal(t, tt.want, got.Error())
+				require.ErrorIs(t, got, commerr.ErrInvalidArgument)
+				require.ErrorContains(t, got, tt.want)
 			}
 		})
 	}

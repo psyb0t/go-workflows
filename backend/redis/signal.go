@@ -2,18 +2,19 @@ package redis
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func (rb *redisBackend) SignalWorkflow(ctx context.Context, instanceID string, event *history.Event) error {
 	// Get current execution of the instance
 	instance, err := rb.readActiveInstanceExecution(ctx, instanceID)
 	if err != nil {
-		return fmt.Errorf("reading active instance execution: %w", err)
+		return ctxerrors.Wrap(err, "reading active instance execution")
 	}
 
 	if instance == nil {
@@ -22,12 +23,12 @@ func (rb *redisBackend) SignalWorkflow(ctx context.Context, instanceID string, e
 
 	instanceState, err := readInstance(ctx, rb.rdb, rb.keys.instanceKey(instance))
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute signal")
 	}
 
 	eventData, payload, err := marshalEvent(event)
 	if err != nil {
-		return fmt.Errorf("marshaling event: %w", err)
+		return ctxerrors.Wrap(err, "marshaling event")
 	}
 
 	queue := workflow.Queue(instanceState.Queue)
@@ -50,7 +51,7 @@ func (rb *redisBackend) SignalWorkflow(ctx context.Context, instanceID string, e
 	// Execute the Lua script
 	_, err = signalWorkflowCmd.Run(ctx, rb.rdb, keys, args...).Result()
 	if err != nil {
-		return fmt.Errorf("signaling workflow: %w", err)
+		return ctxerrors.Wrap(err, "signaling workflow")
 	}
 
 	return nil

@@ -1,11 +1,12 @@
 package workflow
 
 import (
+	"errors"
 	"math"
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
 )
 
 type RetryOptions struct {
@@ -75,7 +76,7 @@ func WithRetries[T any](ctx Context, retryOptions RetryOptions, fn func(ctx Cont
 				break
 			}
 
-			if err == Canceled {
+			if errors.Is(err, Canceled) {
 				break
 			}
 

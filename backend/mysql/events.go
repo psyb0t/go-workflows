@@ -3,11 +3,12 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func insertPendingEvents(ctx context.Context, tx *sql.Tx, instance *core.WorkflowInstance, newEvents []*history.Event) error {
@@ -27,9 +28,11 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 		}
 		batchEvents := events[batchStart:batchEnd]
 
+		// #nosec G202 -- Only placeholder groups are generated; values remain bound parameters.
 		aquery := "INSERT IGNORE INTO `attributes` (event_id, instance_id, execution_id, data) VALUES (?, ?, ?, ?)" + strings.Repeat(", (?, ?, ?, ?)", len(batchEvents)-1)
 		aargs := make([]interface{}, 0, len(batchEvents)*4)
 
+		// #nosec G202 -- tableName comes only from the two fixed-table callers above.
 		query := "INSERT INTO `" + tableName +
 			"` (event_id, sequence_id, instance_id, execution_id, event_type, timestamp, schedule_event_id, visible_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)" +
 			strings.Repeat(", (?, ?, ?, ?, ?, ?, ?, ?)", len(batchEvents)-1)
@@ -39,7 +42,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 		for _, newEvent := range batchEvents {
 			a, err := history.SerializeAttributes(newEvent.Attributes)
 			if err != nil {
-				return err
+				return ctxerrors.Wrap(err, "execute events")
 			}
 
 			aargs = append(aargs, newEvent.ID, instance.InstanceID, instance.ExecutionID, a)
@@ -54,7 +57,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			aquery,
 			aargs...,
 		); err != nil {
-			return fmt.Errorf("inserting attributes: %w", err)
+			return ctxerrors.Wrap(err, "inserting attributes")
 		}
 
 		_, err := tx.ExecContext(
@@ -63,7 +66,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			args...,
 		)
 		if err != nil {
-			return fmt.Errorf("inserting events: %w", err)
+			return ctxerrors.Wrap(err, "inserting events")
 		}
 	}
 
@@ -78,6 +81,9 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 		instance.ExecutionID,
 		scheduleEventID,
 	)
+	if err != nil {
+		return ctxerrors.Wrap(err, "execute events")
+	}
 
-	return err
+	return nil
 }

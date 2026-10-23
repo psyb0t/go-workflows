@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/registry"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
 
 	"github.com/google/uuid"
 )
@@ -54,10 +54,16 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1, registry.WithName("WorkflowName"))
-	w.RegisterWorkflow(SubWorkflow1, registry.WithName("SubWorkflowName"))
+	if err := w.RegisterWorkflow(Workflow1, registry.WithName("WorkflowName")); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow1, registry.WithName("SubWorkflowName")); err != nil {
+		panic(err)
+	}
 
-	w.RegisterActivity(Activity1)
+	if err := w.RegisterActivity(Activity1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")

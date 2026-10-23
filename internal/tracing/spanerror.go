@@ -10,5 +10,6 @@ func WithSpanError(span trace.Span, err error) error {
 		span.SetStatus(codes.Error, err.Error())
 	}
 
+	// Annotating a span must not change the error's concrete protocol type.
 	return err
 }

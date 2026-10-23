@@ -2,8 +2,10 @@ package core
 
 import (
 	"database/sql"
-	"errors"
 	"regexp"
+
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 )
 
 type Queue string
@@ -29,7 +31,7 @@ var validQueueName = regexp.MustCompile(`^[a-zA-Z0-9_-]{4,31}$`)
 // ValidQueue ensures that the queue name is valid.
 func ValidQueue(q Queue) error {
 	if !validQueueName.MatchString(string(q)) {
-		return errors.New("invalid queue name")
+		return ctxerrors.Wrap(commerr.ErrInvalidArgument, "invalid queue name")
 	}
 
 	return nil

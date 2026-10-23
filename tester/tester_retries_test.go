@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_withRetries_permanent(t *testing.T) {
@@ -69,7 +70,7 @@ func Test_withRetries_contextCanceled(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "context canceled")
+	require.ErrorContains(t, err, workflow.Canceled.Error())
 	tester.AssertExpectations(t)
 }
 
@@ -110,7 +111,7 @@ func Test_withRetries_contextCanceledDuringRetry(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "context canceled")
+	require.ErrorContains(t, err, workflow.Canceled.Error())
 	tester.AssertExpectations(t)
 }
 
@@ -148,7 +149,7 @@ func Test_withRetries_contextCanceledDuringExecution(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "context canceled")
+	require.ErrorContains(t, err, workflow.Canceled.Error())
 	tester.AssertExpectations(t)
 }
 
@@ -173,7 +174,9 @@ func Test_withRetries_timerCancellation(t *testing.T) {
 
 		// Start a timer to cancel the context after a short delay
 		workflow.Go(ctx, func(ctx workflow.Context) {
-			workflow.Sleep(ctx, 2*time.Second)
+			if err := workflow.Sleep(ctx, 2*time.Second); err != nil {
+				t.Errorf("unexpected operation error: %v", err)
+			}
 			cancel()
 		})
 
@@ -187,6 +190,6 @@ func Test_withRetries_timerCancellation(t *testing.T) {
 	require.True(t, tester.WorkflowFinished())
 
 	_, err := tester.WorkflowResult()
-	require.EqualError(t, err, "context canceled")
+	require.ErrorContains(t, err, workflow.Canceled.Error())
 	tester.AssertExpectations(t)
 }

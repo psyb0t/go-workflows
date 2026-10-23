@@ -5,8 +5,9 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/backend/history"
 )
 
 func TestScheduleTimerCommand_StateTransitions(t *testing.T) {
@@ -74,14 +75,14 @@ func TestScheduleTimerCommand_StateTransitions(t *testing.T) {
 		{"Invalid_HandleCancel", func(t *testing.T, c *ScheduleTimerCommand, clock clock.Clock) {
 			c.Commit()
 
-			require.PanicsWithError(t, "invalid state transition for command ScheduleTimer: Committed -> Canceled", func() {
+			assertInvalidStatePanic(t, "invalid state transition for command ScheduleTimer: Committed -> Canceled", func() {
 				c.HandleCancel()
 			})
 		}},
 		{"Invalid_Commit", func(t *testing.T, c *ScheduleTimerCommand, clock clock.Clock) {
 			c.Cancel()
 
-			require.PanicsWithError(t, "invalid state transition for command ScheduleTimer: Canceled -> Committed", func() {
+			assertInvalidStatePanic(t, "invalid state transition for command ScheduleTimer: Canceled -> Committed", func() {
 				c.Commit()
 			})
 		}},

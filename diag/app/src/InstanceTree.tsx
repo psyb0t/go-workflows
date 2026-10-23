@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "react-bootstrap";
-import Tree from "react-d3-tree";
-import { Point } from "react-d3-tree/lib/types/types/common";
+import Tree, { Point } from "react-d3-tree";
 import useFetch from "react-fetch-hook";
 import { Link } from "react-router-dom";
 import { WorkflowInstanceState } from "./Components";

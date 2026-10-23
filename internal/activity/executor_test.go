@@ -7,18 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/fn"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/fn"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/registry"
 )
 
 func TestExecutor_ExecuteActivity(t *testing.T) {
@@ -37,7 +38,8 @@ func TestExecutor_ExecuteActivity(t *testing.T) {
 			result: func(t *testing.T, result payload.Payload, err error) {
 				require.Nil(t, result)
 				require.Error(t, err)
-				require.EqualError(t, err, "activity not found: activity not found")
+				require.ErrorContains(t, err, "activity not found")
+				require.False(t, workflowerrors.CanRetry(err))
 			},
 		},
 		{
@@ -53,7 +55,8 @@ func TestExecutor_ExecuteActivity(t *testing.T) {
 			result: func(t *testing.T, result payload.Payload, err error) {
 				require.Nil(t, result)
 				require.Error(t, err)
-				require.EqualError(t, err, "converting activity inputs: mismatched argument count: expected 2, got 0")
+				require.ErrorContains(t, err, "converting activity inputs: mismatched argument count: expected 2, got 0")
+				require.False(t, workflowerrors.CanRetry(err))
 			},
 		},
 		{

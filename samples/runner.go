@@ -8,13 +8,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/mysql"
-	postgres "github.com/cschleiden/go-workflows/backend/postgres"
-	"github.com/cschleiden/go-workflows/backend/redis"
-	"github.com/cschleiden/go-workflows/backend/sqlite"
-	"github.com/cschleiden/go-workflows/diag"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
 	redisv9 "github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/mysql"
+	postgres "github.com/psyb0t/go-workflows/backend/postgres"
+	"github.com/psyb0t/go-workflows/backend/redis"
+	"github.com/psyb0t/go-workflows/backend/sqlite"
+	"github.com/psyb0t/go-workflows/diag"
 )
 
 func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backend.Backend {
@@ -51,7 +54,7 @@ func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backen
 			if err != nil {
 				panic(err)
 			}
-			defer db.Close()
+			defer cleanup.Close(context.Background(), db)
 
 			_, err = db.Exec("CREATE DATABASE " + name)
 			if err != nil {
@@ -72,7 +75,9 @@ func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backen
 		})
 
 		if recreate {
-			rclient.FlushAll(context.Background()).Result()
+			if _, err := rclient.FlushAll(context.Background()).Result(); err != nil {
+				panic(err)
+			}
 		}
 
 		b, err := redis.NewRedisBackend(rclient, redis.WithBackendOptions(opt...))
@@ -83,7 +88,12 @@ func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backen
 		// Start diagnostic server under /diag
 		m := http.NewServeMux()
 		m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(b)))
-		go http.ListenAndServe(":3000", m)
+		server := &http.Server{Addr: "127.0.0.1:3000", Handler: m, ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("diagnostics server failed: %v", err)
+			}
+		}()
 
 		log.Println("Debug UI available at http://localhost:3000/diag")
 

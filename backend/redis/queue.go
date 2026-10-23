@@ -8,9 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type taskQueue[T any] struct {
@@ -74,21 +77,21 @@ func newTaskQueue[T any](ctx context.Context, rdb redis.UniversalClient, keyPref
 	}
 
 	if err := loadScripts(ctx, rdb, cmdMapping); err != nil {
-		return nil, fmt.Errorf("loading Lua scripts: %w", err)
+		return nil, ctxerrors.Wrap(err, "loading Lua scripts")
 	}
 
 	return tq, nil
 }
 
 func (q *taskQueue[T]) Prepare(ctx context.Context, rdb redis.UniversalClient, queues []workflow.Queue) error {
-	keys := []string{}
+	keys := make([]string, 0, len(queues))
 	for _, queue := range queues {
 		keys = append(keys, q.Keys(queue).StreamKey)
 	}
 
 	_, err := prepareCmd.Run(ctx, rdb, keys, q.groupName).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return fmt.Errorf("preparing queues: %w", err)
+		return ctxerrors.Wrap(err, "preparing queues")
 	}
 
 	return nil
@@ -104,7 +107,7 @@ func (q *taskQueue[T]) Keys(queue workflow.Queue) KeyInfo {
 func (q *taskQueue[T]) Size(ctx context.Context, rdb redis.UniversalClient) (map[workflow.Queue]int64, error) {
 	sizeData, err := sizeCmd.Run(ctx, rdb, []string{q.queueSetKey}).Slice()
 	if err != nil {
-		return nil, fmt.Errorf("getting queue size: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting queue size")
 	}
 
 	res := map[workflow.Queue]int64{}
@@ -127,7 +130,7 @@ func (q *taskQueue[T]) Size(ctx context.Context, rdb redis.UniversalClient) (map
 func (q *taskQueue[T]) Enqueue(ctx context.Context, p redis.Pipeliner, queue workflow.Queue, id string, data *T) error {
 	ds, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute queue")
 	}
 
 	keys := q.Keys(queue)
@@ -141,7 +144,7 @@ func (q *taskQueue[T]) Dequeue(ctx context.Context, rdb redis.UniversalClient, q
 	// Try to recover abandoned tasks
 	task, err := q.recover(ctx, rdb, queues, lockTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("checking for abandoned tasks: %w", err)
+		return nil, ctxerrors.Wrap(err, "checking for abandoned tasks")
 	}
 
 	if task != nil {
@@ -166,7 +169,7 @@ func (q *taskQueue[T]) Dequeue(ctx context.Context, rdb redis.UniversalClient, q
 		Block:    timeout,
 	}).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("dequeueing task: %w", err)
+		return nil, ctxerrors.Wrap(err, "dequeueing task")
 	}
 
 	if len(ids) == 0 || len(ids[0].Messages) == 0 || errors.Is(err, redis.Nil) {
@@ -188,7 +191,7 @@ func (q *taskQueue[T]) Extend(ctx context.Context, p redis.Pipeliner, queue work
 		MinIdle:  0, // Always claim this message
 	}).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return fmt.Errorf("extending lease: %w", err)
+		return ctxerrors.Wrap(err, "extending lease")
 	}
 
 	return nil
@@ -200,7 +203,7 @@ func (q *taskQueue[T]) Complete(ctx context.Context, p redis.Pipeliner, queue wo
 		q.Keys(queue).StreamKey,
 	}, taskID, q.groupName)
 	if err := cmd.Err(); err != nil && !errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("completing task: %w", err)
+		return nil, ctxerrors.Wrap(err, "completing task")
 	}
 
 	return cmd, nil
@@ -209,14 +212,14 @@ func (q *taskQueue[T]) Complete(ctx context.Context, p redis.Pipeliner, queue wo
 func (q *taskQueue[T]) Data(ctx context.Context, p redis.Pipeliner, queue workflow.Queue, taskID string) (*TaskItem[T], error) {
 	msg, err := p.XRange(ctx, q.Keys(queue).StreamKey, taskID, taskID).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("finding task: %w", err)
+		return nil, ctxerrors.Wrap(err, "finding task")
 	}
 
 	return msgToTaskItem[T](&msg[0])
 }
 
 func (q *taskQueue[T]) recover(ctx context.Context, rdb redis.UniversalClient, queues []workflow.Queue, idleTimeout time.Duration) (*TaskItem[T], error) {
-	keys := []string{}
+	keys := make([]string, 0, len(queues))
 
 	for _, queue := range queues {
 		keys = append(keys, q.Keys(queue).StreamKey)
@@ -235,7 +238,7 @@ func (q *taskQueue[T]) recover(ctx context.Context, rdb redis.UniversalClient, q
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("recovering abandoned task: %w", err)
+		return nil, ctxerrors.Wrap(err, "recovering abandoned task")
 	}
 
 	if len(r) > 1 {
@@ -269,7 +272,7 @@ func msgToTaskItem[T any](msg *redis.XMessage) (*TaskItem[T], error) {
 	var t T
 	if data != "" {
 		if err := json.Unmarshal([]byte(data), &t); err != nil {
-			return nil, err
+			return nil, ctxerrors.Wrap(err, "execute queue")
 		}
 	}
 

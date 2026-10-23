@@ -1,0 +1,7 @@
+vulnerabilities:
+  - id: CVE-2026-41567
+    paths: [go.mod]
+    statement: "Docker daemon archive extraction is not linked. vendor/modules.txt contains no packages from github.com/docker/docker. This library and its test tools do not build a Docker daemon. https://github.com/moby/moby/security/advisories/GHSA-x86f-5xw2-fm2r"
+  - id: CVE-2026-42306
+    paths: [go.mod]
+    statement: "Docker daemon mount setup is not linked. vendor/modules.txt contains no packages from github.com/docker/docker. Keep the host Docker daemon patched separately. https://github.com/moby/moby/security/advisories/GHSA-rg2x-37c3-w2rh"

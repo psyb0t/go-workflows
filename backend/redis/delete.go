@@ -2,9 +2,10 @@ package redis
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/core"
 )
 
 // deleteInstance deletes an instance from Redis. It does not attempt to remove any future events or pending
@@ -20,7 +21,7 @@ func (rb *redisBackend) deleteInstance(ctx context.Context, instance *core.Workf
 		rb.keys.activeInstanceExecutionKey(instance.InstanceID),
 		rb.keys.instancesByCreation(),
 	}, instanceSegment(instance)).Err(); err != nil {
-		return fmt.Errorf("failed to delete instance: %w", err)
+		return ctxerrors.Wrap(err, "failed to delete instance")
 	}
 
 	return nil

@@ -2,7 +2,8 @@ package history
 
 import (
 	"encoding/json"
-	"errors"
+
+	"github.com/psyb0t/ctxerrors"
 )
 
 func (e *Event) UnmarshalJSON(data []byte) error {
@@ -14,13 +15,13 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 	}{}
 
 	if err := json.Unmarshal(data, &a); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute serialization")
 	}
 
 	*e = *(*Event)(a.Aevent)
 	attributes, err := DeserializeAttributes(e.Type, a.Attributes)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute serialization")
 	}
 
 	e.Attributes = attributes
@@ -79,9 +80,12 @@ func DeserializeAttributes(eventType EventType, attributes []byte) (attr interfa
 		attr = &SubWorkflowFailedAttributes{}
 
 	default:
-		return nil, errors.New("unknown event type when deserializing attributes")
+		return nil, ctxerrors.New("unknown event type when deserializing attributes")
 	}
 
 	err = json.Unmarshal(attributes, &attr)
-	return attr, err
+	if err != nil {
+		return attr, ctxerrors.Wrap(err, "execute serialization")
+	}
+	return attr, nil
 }

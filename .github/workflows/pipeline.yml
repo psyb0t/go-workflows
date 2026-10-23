@@ -1,0 +1,70 @@
+name: pipeline
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*', 'analyzer/v*']
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '43 7 * * 3'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  code:
+    if: "!startsWith(github.ref, 'refs/tags/') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+    permissions:
+      contents: read
+      security-events: write
+    uses: psyb0t/reusable-github-workflows/.github/workflows/code-workflow.yml@master
+    with:
+      build_command: make build
+      lint_command: make lint
+      test_command: make test-coverage
+      sec_command: make sec
+      generate_command: make generate
+      coverage_file: coverage-percent.txt
+      sarif_file: sec.sarif
+      sarif_category: go
+
+  validate-tag:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - run: make check-release-tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+
+  wait:
+    needs: [validate-tag]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      actions: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/wait-for-default-branch.yml@master
+
+  badges:
+    needs: [code, wait]
+    if: "always() && ((github.ref_name == github.event.repository.default_branch && needs.code.result == 'success') || (startsWith(github.ref, 'refs/tags/v') && needs.wait.result == 'success'))"
+    permissions:
+      contents: write
+      actions: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
+    with:
+      coverage: true
+      importers: true
+      coverage_run_id: ${{ needs.wait.outputs.run_id }}
+
+  release:
+    needs: [wait]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    uses: psyb0t/reusable-github-workflows/.github/workflows/release-workflow.yml@master

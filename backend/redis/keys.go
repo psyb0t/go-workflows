@@ -3,7 +3,7 @@ package redis
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 type keys struct {

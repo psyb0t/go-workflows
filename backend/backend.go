@@ -2,31 +2,17 @@ package backend
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/workflow"
 )
-
-var ErrInstanceNotFound = errors.New("workflow instance not found")
-var ErrInstanceAlreadyExists = errors.New("workflow instance already exists")
-var ErrInstanceNotFinished = errors.New("workflow instance is not finished")
-
-type ErrNotSupported struct {
-	Message string
-}
-
-func (e ErrNotSupported) Error() string {
-	return fmt.Sprintf("not supported: %s", e.Message)
-}
 
 const TracerName = "go-workflow"
 
-//go:generate mockery --name=Backend --inpackage
 type Backend interface {
 	// CreateWorkflowInstance creates a new workflow instance
 	CreateWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error

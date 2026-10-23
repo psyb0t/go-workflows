@@ -5,17 +5,18 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/psyb0t/go-workflows/internal/sync"
+	"github.com/psyb0t/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/workflowstate"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/core"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func newTestContext(tracer trace.Tracer) (sync.Context, *workflowstate.WfState) {

@@ -2,23 +2,27 @@ package activity
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
+	"github.com/psyb0t/ctxscope"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/converter"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/payload"
+	"github.com/psyb0t/go-workflows/internal/args"
+	"github.com/psyb0t/go-workflows/internal/log"
+	"github.com/psyb0t/go-workflows/internal/tracing"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/registry"
+	wf "github.com/psyb0t/go-workflows/workflow"
 )
 
 type Executor struct {
@@ -60,9 +64,17 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 		var err error
 		activityCtx, err = propagator.Extract(activityCtx, a.Metadata)
 		if err != nil {
-			return nil, workflowerrors.NewPermanentError(fmt.Errorf("extracting context from propagator: %w", err))
+			return nil, workflowerrors.NewPermanentError(ctxerrors.Wrap(err, "extracting context from propagator"))
 		}
 	}
+	activityCtx = ctxscope.Set(activityCtx,
+		ctxscope.Attr("workflow_id", task.WorkflowInstance.InstanceID),
+		ctxscope.Attr("workflow_run_id", task.WorkflowInstance.ExecutionID),
+		ctxscope.Attr("activity_id", task.ID),
+		ctxscope.Attr("activity_type", a.Name),
+		ctxscope.Attr("attempt", a.Attempt),
+		ctxscope.Attr("task_queue", task.Queue),
+	)
 
 	activityCtx, span := e.tracer.Start(activityCtx, fmt.Sprintf("ActivityTaskExecution: %s", a.Name), trace.WithAttributes(
 		attribute.String(log.ActivityNameKey, a.Name),
@@ -74,17 +86,17 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 
 	activity, err := e.r.GetActivity(a.Name)
 	if err != nil {
-		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, fmt.Errorf("activity not found: %w", err)))
+		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, ctxerrors.Wrap(err, "activity not found")))
 	}
 
 	activityFn := reflect.ValueOf(activity)
 	if activityFn.Type().Kind() != reflect.Func {
-		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, errors.New("activity not a function")))
+		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, ctxerrors.Wrap(commerr.ErrInvalidArgument, "activity not a function")))
 	}
 
 	args, addContext, err := args.InputsToArgs(e.converter, activityFn, a.Inputs)
 	if err != nil {
-		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, fmt.Errorf("converting activity inputs: %w", err)))
+		return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, ctxerrors.Wrap(err, "converting activity inputs")))
 	}
 
 	// Execute activity
@@ -113,7 +125,7 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 
 	if len(rv) < 1 || len(rv) > 2 {
 		return nil, workflowerrors.NewPermanentError(
-			tracing.WithSpanError(span, errors.New("activity has to return either (error) or (<result>, error)")))
+			tracing.WithSpanError(span, ctxerrors.Wrap(commerr.ErrInvalidArgument, "activity has to return either (error) or (<result>, error)")))
 	}
 
 	var result payload.Payload
@@ -123,7 +135,7 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 		var err error
 		result, err = e.converter.To(rv[0].Interface())
 		if err != nil {
-			return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, fmt.Errorf("converting activity result: %w", err)))
+			return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, ctxerrors.Wrap(err, "converting activity result")))
 		}
 	}
 
@@ -137,7 +149,7 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 	err, ok := errResult.Interface().(error)
 	if !ok {
 		return nil, workflowerrors.NewPermanentError(
-			tracing.WithSpanError(span, fmt.Errorf("activity error result does not satisfy error interface (%T): %v", errResult, errResult)))
+			tracing.WithSpanError(span, ctxerrors.Wrapf(commerr.ErrInvalidState, "activity error result does not satisfy error interface (%T): %v", errResult, errResult)))
 	}
 
 	return result, workflowerrors.FromError(tracing.WithSpanError(span, err))

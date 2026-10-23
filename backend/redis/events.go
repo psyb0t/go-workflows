@@ -3,7 +3,9 @@ package redis
 import (
 	"encoding/json"
 
-	"github.com/cschleiden/go-workflows/backend/history"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend/history"
 )
 
 type eventWithoutAttributes struct {
@@ -23,7 +25,7 @@ func (e *eventWithoutAttributes) MarshalJSON() ([]byte, error) {
 func marshalEventWithoutAttributes(event *history.Event) (string, error) {
 	data, err := json.Marshal(&eventWithoutAttributes{event})
 	if err != nil {
-		return "", err
+		return "", ctxerrors.Wrap(err, "execute events")
 	}
 
 	return string(data), nil

@@ -3,13 +3,16 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/test"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/test"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 var _ test.TestBackend = (*sqliteBackend)(nil)
@@ -19,9 +22,9 @@ func (sb *sqliteBackend) GetFutureEvents(ctx context.Context) ([]*history.Event,
 		ReadOnly: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute events")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// There is no index on `visible_at`, but this is okay for test only usage.
 	futureEvents, err := tx.QueryContext(
@@ -29,13 +32,13 @@ func (sb *sqliteBackend) GetFutureEvents(ctx context.Context) ([]*history.Event,
 		"SELECT pe.id, pe.sequence_id, pe.instance_id, pe.execution_id, pe.event_type, pe.timestamp, pe.schedule_event_id, pe.visible_at, a.data FROM `pending_events` pe JOIN `attributes` a ON a.id = pe.id AND a.instance_id = pe.instance_id AND a.execution_id = pe.execution_id WHERE pe.visible_at IS NOT NULL",
 	)
 	if err != nil {
-		return nil, fmt.Errorf("getting history: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting history")
 	}
 	if futureEvents.Err() != nil {
 		return nil, futureEvents.Err()
 	}
 
-	defer futureEvents.Close()
+	defer cleanup.Close(ctx, futureEvents)
 
 	f := make([]*history.Event, 0)
 
@@ -56,12 +59,12 @@ func (sb *sqliteBackend) GetFutureEvents(ctx context.Context) ([]*history.Event,
 			&fe.VisibleAt,
 			&attributes,
 		); err != nil {
-			return nil, fmt.Errorf("scanning event: %w", err)
+			return nil, ctxerrors.Wrap(err, "scanning event")
 		}
 
 		a, err := history.DeserializeAttributes(fe.Type, attributes)
 		if err != nil {
-			return nil, fmt.Errorf("deserializing attributes: %w", err)
+			return nil, ctxerrors.Wrap(err, "deserializing attributes")
 		}
 
 		fe.Attributes = a
@@ -81,19 +84,18 @@ func getPendingEvents(ctx context.Context, tx *sql.Tx, instance *core.WorkflowIn
 		instance.ExecutionID,
 		now,
 	)
-
 	if err != nil {
-		return nil, fmt.Errorf("getting new events: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting new events")
 	}
 
-	defer events.Close()
+	defer cleanup.Close(ctx, events)
 
 	pendingEvents := make([]*history.Event, 0)
 
 	for events.Next() {
 		pendingEvent, err := scanEvent(events)
 		if err != nil {
-			return nil, fmt.Errorf("reading event: %w", err)
+			return nil, ctxerrors.Wrap(err, "reading event")
 		}
 
 		pendingEvents = append(pendingEvents, pendingEvent)
@@ -117,17 +119,17 @@ func getHistory(ctx context.Context, tx *sql.Tx, instance *core.WorkflowInstance
 			ctx, "SELECT h.*, a.data FROM `history` h INNER JOIN `attributes` a ON a.id = h.id AND a.instance_id = h.instance_id AND a.execution_id = h.execution_id WHERE h.instance_id = ? AND h.execution_id = ?", instance.InstanceID, instance.ExecutionID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("getting history: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting history")
 	}
 
-	defer historyEvents.Close()
+	defer cleanup.Close(ctx, historyEvents)
 
 	events := make([]*history.Event, 0)
 
 	for historyEvents.Next() {
 		historyEvent, err := scanEvent(historyEvents)
 		if err != nil {
-			return nil, fmt.Errorf("reading event: %w", err)
+			return nil, ctxerrors.Wrap(err, "reading event")
 		}
 
 		events = append(events, historyEvent)
@@ -161,12 +163,12 @@ func scanEvent(row Scanner) (*history.Event, error) {
 		&historyEvent.VisibleAt,
 		&attributes,
 	); err != nil {
-		return historyEvent, fmt.Errorf("scanning event: %w", err)
+		return historyEvent, ctxerrors.Wrap(err, "scanning event")
 	}
 
 	a, err := history.DeserializeAttributes(historyEvent.Type, attributes)
 	if err != nil {
-		return historyEvent, fmt.Errorf("deserializing attributes: %w", err)
+		return historyEvent, ctxerrors.Wrap(err, "deserializing attributes")
 	}
 
 	historyEvent.Attributes = a
@@ -188,9 +190,11 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 		batchEvents := events[batchStart:batchEnd]
 
 		// INSERT OR IGNORE since the attributes might already exist due to an event being moved from pending to history.
+		// #nosec G202 -- Only placeholder groups are generated; values remain bound parameters.
 		aquery := "INSERT OR IGNORE INTO `attributes` (id, instance_id, execution_id, data) VALUES (?, ?, ?, ?)" + strings.Repeat(", (?, ?, ?, ?)", len(batchEvents)-1)
 		aargs := make([]interface{}, 0, len(batchEvents)*4)
 
+		// #nosec G202 -- tableName is an internal fixed-table selector, never a request value.
 		query := "INSERT INTO `" + tableName + "` (id, sequence_id, instance_id, execution_id, event_type, timestamp, schedule_event_id, visible_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)" +
 			strings.Repeat(", (?, ?, ?, ?, ?, ?, ?, ?)", len(batchEvents)-1)
 
@@ -199,7 +203,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 		for _, newEvent := range batchEvents {
 			a, err := history.SerializeAttributes(newEvent.Attributes)
 			if err != nil {
-				return err
+				return ctxerrors.Wrap(err, "execute events")
 			}
 
 			aargs = append(aargs, newEvent.ID, instance.InstanceID, instance.ExecutionID, a)
@@ -213,7 +217,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			aquery,
 			aargs...,
 		); err != nil {
-			return fmt.Errorf("inserting attributes: %w", err)
+			return ctxerrors.Wrap(err, "inserting attributes")
 		}
 
 		if _, err := tx.ExecContext(
@@ -221,7 +225,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			query,
 			args...,
 		); err != nil {
-			return fmt.Errorf("inserting events: %w", err)
+			return ctxerrors.Wrap(err, "inserting events")
 		}
 	}
 
@@ -237,16 +241,16 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 		scheduleEventID,
 	)
 	if err != nil {
-		return fmt.Errorf("removing future event: %w", err)
+		return ctxerrors.Wrap(err, "removing future event")
 	}
 
 	ids := make([]interface{}, 0)
 
-	defer row.Close()
+	defer cleanup.Close(ctx, row)
 	for row.Next() {
 		var id string
 		if err := row.Scan(&id); err != nil {
-			return fmt.Errorf("scanning id: %w", err)
+			return ctxerrors.Wrap(err, "scanning id")
 		}
 
 		ids = append(ids, id)
@@ -258,6 +262,7 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 
 	// Delete attributes
 	if len(ids) > 0 {
+		// #nosec G202 -- IDs are bound parameters; only placeholder groups are generated.
 		query := "DELETE FROM `attributes` WHERE id IN (?)" + strings.Repeat(", (?)", len(ids)-1)
 
 		if _, err := tx.ExecContext(
@@ -265,9 +270,13 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 			query,
 			ids...,
 		); err != nil {
-			return fmt.Errorf("removing attributes: %w", err)
+			return ctxerrors.Wrap(err, "removing attributes")
 		}
 	}
 
-	return err
+	if err != nil {
+		return ctxerrors.Wrap(err, "execute events")
+	}
+
+	return nil
 }

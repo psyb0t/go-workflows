@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/activity"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 type Inputs struct {
@@ -35,27 +37,42 @@ func Workflow1(ctx workflow.Context, msg string, times int, inputs Inputs) (int,
 
 	customSpan.End()
 
-	workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx)
+	if _, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx); err != nil {
+		panic(err)
+	}
 
-	workflow.Sleep(ctx, time.Second*1)
+	if err := workflow.Sleep(ctx, time.Second*1); err != nil {
+		panic(err)
+	}
 
-	workflow.CreateSubWorkflowInstance[any](ctx, workflow.DefaultSubWorkflowOptions, Subworkflow).Get(ctx)
+	if _, err := workflow.CreateSubWorkflowInstance[any](ctx, workflow.DefaultSubWorkflowOptions, Subworkflow).Get(ctx); err != nil {
+		panic(err)
+	}
 
-	workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx)
+	if _, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx); err != nil {
+		panic(err)
+	}
 
 	_, span = workflow.Tracer(ctx).Start(ctx, "Wait-for-signal")
 	workflow.NewSignalChannel[string](ctx, "test-signal").Receive(ctx)
 	span.End()
 
 	r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, RetriedActivity, 35, 12).Get(ctx)
+	if err != nil {
+		return r1, ctxerrors.Wrap(err, "execute workflow")
+	}
 
-	return r1, err
+	return r1, nil
 }
 
 func Subworkflow(ctx workflow.Context) error {
-	workflow.Sleep(ctx, time.Millisecond*500)
+	if err := workflow.Sleep(ctx, time.Millisecond*500); err != nil {
+		panic(err)
+	}
 
-	workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx)
+	if _, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx); err != nil {
+		panic(err)
+	}
 
 	return nil
 }
@@ -81,7 +98,7 @@ func RetriedActivity(ctx context.Context, a, b int) (int, error) {
 
 	if activity.Attempt(ctx) < 1 {
 		logger.Info("Simulating failure")
-		return 0, errors.New("simulated failure")
+		return 0, ctxerrors.New("simulated failure")
 	}
 
 	return a + b, nil

@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
+
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func Test_ContinueAsNew(t *testing.T) {
@@ -48,7 +49,9 @@ func Test_ContinueAsNew_SubWorkflow(t *testing.T) {
 
 	tester := NewWorkflowTester[int](wf)
 
-	tester.registry.RegisterWorkflow(swf)
+	if err := tester.registry.RegisterWorkflow(swf); err != nil {
+		t.Errorf("unexpected operation error: %v", err)
+	}
 
 	tester.Execute(context.Background(), 0)
 

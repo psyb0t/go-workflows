@@ -10,16 +10,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/go-workflows/internal/cleanup"
+
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/backend/metadata"
+	"github.com/psyb0t/go-workflows/backend/metrics"
+	"github.com/psyb0t/go-workflows/core"
+	"github.com/psyb0t/go-workflows/internal/metrickeys"
+	"github.com/psyb0t/go-workflows/internal/workflowerrors"
+	"github.com/psyb0t/go-workflows/workflow"
 
 	_ "modernc.org/sqlite"
 
@@ -151,7 +156,7 @@ func (sb *sqliteBackend) FeatureSupported(feature backend.Feature) bool {
 func (sb *sqliteBackend) Close() error {
 	if sb.memConn != nil {
 		if err := sb.memConn.Close(); err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute sqlite")
 		}
 	}
 
@@ -168,22 +173,22 @@ func (sb *sqliteBackend) Migrate() error {
 
 	dbi, err := sqlite.WithInstance(sb.db, &sqlite.Config{})
 	if err != nil {
-		return fmt.Errorf("creating migration instance: %w", err)
+		return ctxerrors.Wrap(err, "creating migration instance")
 	}
 
 	migrations, err := iofs.New(migrationsFS, "db/migrations")
 	if err != nil {
-		return fmt.Errorf("creating migration source: %w", err)
+		return ctxerrors.Wrap(err, "creating migration source")
 	}
 
 	m, err := migrate.NewWithInstance("iofs", migrations, "sqlite", dbi)
 	if err != nil {
-		return fmt.Errorf("creating migration: %w", err)
+		return ctxerrors.Wrap(err, "creating migration")
 	}
 
 	if err := m.Up(); err != nil {
 		if !errors.Is(err, migrate.ErrNoChange) {
-			return fmt.Errorf("running migrations: %w", err)
+			return ctxerrors.Wrap(err, "running migrations")
 		}
 
 		sb.options.Logger.Info("No migrations to apply")
@@ -207,23 +212,23 @@ func (sb *sqliteBackend) Options() *backend.Options {
 func (sb *sqliteBackend) CreateWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("starting transaction: %w", err)
+		return ctxerrors.Wrap(err, "starting transaction")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	a := event.Attributes.(*history.ExecutionStartedAttributes)
 
 	// Create workflow instance
 	if err := createInstance(ctx, tx, a.Queue, instance, a.Metadata); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
 
 	if err := insertPendingEvents(ctx, tx, instance, []*history.Event{event}); err != nil {
-		return fmt.Errorf("inserting new event: %w", err)
+		return ctxerrors.Wrap(err, "inserting new event")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("creating workflow instance: %w", err)
+		return ctxerrors.Wrap(err, "creating workflow instance")
 	}
 
 	return nil
@@ -246,7 +251,7 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 
 	metadataJson, err := json.Marshal(metadata)
 	if err != nil {
-		return fmt.Errorf("marshaling metadata: %w", err)
+		return ctxerrors.Wrap(err, "marshaling metadata")
 	}
 
 	_, err = tx.ExecContext(
@@ -262,7 +267,7 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 		core.WorkflowInstanceStateActive,
 	)
 	if err != nil {
-		return fmt.Errorf("inserting workflow instance: %w", err)
+		return ctxerrors.Wrap(err, "inserting workflow instance")
 	}
 
 	return nil
@@ -271,12 +276,12 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 func (sb *sqliteBackend) RemoveWorkflowInstance(ctx context.Context, instance *core.WorkflowInstance) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	if err := sb.removeWorkflowInstance(ctx, instance, tx); err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
 
 	return tx.Commit()
@@ -299,15 +304,24 @@ func (sb *sqliteBackend) removeWorkflowInstance(ctx context.Context, instance *c
 	}
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM `instances` WHERE id = ? AND execution_id = ?", instanceID, executionID); err != nil {
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute sqlite")
+		}
+		return nil
 	}
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM `history` WHERE instance_id = ? AND execution_id = ?", instanceID, executionID); err != nil {
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute sqlite")
+		}
+		return nil
 	}
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM `attributes` WHERE instance_id = ? AND execution_id = ?", instanceID, executionID); err != nil {
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute sqlite")
+		}
+		return nil
 	}
 
 	return nil
@@ -321,7 +335,7 @@ func (sb *sqliteBackend) RemoveWorkflowInstances(ctx context.Context, options ..
 
 	rows, err := sb.db.QueryContext(ctx, `SELECT id, execution_id FROM instances WHERE completed_at < ?`, ro.FinishedBefore)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
 
 	instanceIDs := []string{}
@@ -329,7 +343,7 @@ func (sb *sqliteBackend) RemoveWorkflowInstances(ctx context.Context, options ..
 	for rows.Next() {
 		var id, executionID string
 		if err := rows.Scan(&id, &executionID); err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute sqlite")
 		}
 
 		instanceIDs = append(instanceIDs, id)
@@ -347,10 +361,10 @@ func (sb *sqliteBackend) RemoveWorkflowInstances(ctx context.Context, options ..
 
 		tx, err := sb.db.BeginTx(ctx, nil)
 		if err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute sqlite")
 		}
 
-		defer tx.Rollback()
+		defer cleanup.Rollback(ctx, tx)
 
 		placeholders := strings.Repeat(",?", len(instanceIDs)-1)
 		whereCondition := fmt.Sprintf("id IN (?%v) AND execution_id IN (?%v)", placeholders, placeholders)
@@ -364,19 +378,28 @@ func (sb *sqliteBackend) RemoveWorkflowInstances(ctx context.Context, options ..
 
 		// Delete from instances, history and attributes tables
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM `instances` WHERE %v", whereCondition), args...); err != nil {
-			return err
+			if err != nil {
+				return ctxerrors.Wrap(err, "execute sqlite")
+			}
+			return nil
 		}
 
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM `history` WHERE %v", whereCondition), args...); err != nil {
-			return err
+			if err != nil {
+				return ctxerrors.Wrap(err, "execute sqlite")
+			}
+			return nil
 		}
 
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM `attributes` WHERE %v", whereCondition), args...); err != nil {
-			return err
+			if err != nil {
+				return ctxerrors.Wrap(err, "execute sqlite")
+			}
+			return nil
 		}
 
 		if err := tx.Commit(); err != nil {
-			return err
+			return ctxerrors.Wrap(err, "execute sqlite")
 		}
 	}
 
@@ -386,9 +409,9 @@ func (sb *sqliteBackend) RemoveWorkflowInstances(ctx context.Context, options ..
 func (sb *sqliteBackend) CancelWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	instanceID := instance.InstanceID
 	executionID := instance.ExecutionID
@@ -400,11 +423,15 @@ func (sb *sqliteBackend) CancelWorkflowInstance(ctx context.Context, instance *w
 			return backend.ErrInstanceNotFound
 		}
 
-		return err
+		if err != nil {
+			return ctxerrors.Wrap(err, "execute sqlite")
+		}
+
+		return nil
 	}
 
 	if err := insertPendingEvents(ctx, tx, instance, []*history.Event{event}); err != nil {
-		return fmt.Errorf("inserting cancellation event: %w", err)
+		return ctxerrors.Wrap(err, "inserting cancellation event")
 	}
 
 	return tx.Commit()
@@ -415,13 +442,13 @@ func (sb *sqliteBackend) GetWorkflowInstanceHistory(ctx context.Context, instanc
 		ReadOnly: true,
 	})
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	h, err := getHistory(ctx, tx, instance, lastSequenceID)
 	if err != nil {
-		return nil, fmt.Errorf("getting workflow history: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting workflow history")
 	}
 
 	return h, nil
@@ -432,9 +459,9 @@ func (sb *sqliteBackend) GetWorkflowInstanceState(ctx context.Context, instance 
 		ReadOnly: true,
 	})
 	if err != nil {
-		return core.WorkflowInstanceStateActive, err
+		return core.WorkflowInstanceStateActive, ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	row := tx.QueryRowContext(
 		ctx,
@@ -456,9 +483,9 @@ func (sb *sqliteBackend) GetWorkflowInstanceState(ctx context.Context, instance 
 func (sb *sqliteBackend) SignalWorkflow(ctx context.Context, instanceID string, event *history.Event) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// TODO: Combine this with the event insertion
 	var executionID string
@@ -468,7 +495,7 @@ func (sb *sqliteBackend) SignalWorkflow(ctx context.Context, instanceID string, 
 	}
 
 	if err := insertPendingEvents(ctx, tx, core.NewWorkflowInstance(instanceID, executionID), []*history.Event{event}); err != nil {
-		return fmt.Errorf("inserting signal event: %w", err)
+		return ctxerrors.Wrap(err, "inserting signal event")
 	}
 
 	return tx.Commit()
@@ -485,9 +512,9 @@ func (sb *sqliteBackend) PrepareActivityQueues(ctx context.Context, queues []wor
 func (sb *sqliteBackend) GetWorkflowTask(ctx context.Context, queues []workflow.Queue) (*backend.WorkflowTask, error) {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// Lock next workflow task by finding an unlocked instance with new events to process
 	// (work around missing LIMIT support in sqlite driver for UPDATE statements by using sub-query)
@@ -542,7 +569,7 @@ func (sb *sqliteBackend) GetWorkflowTask(ctx context.Context, queues []workflow.
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("locking workflow task: %w", err)
+		return nil, ctxerrors.Wrap(err, "locking workflow task")
 	}
 
 	var wfi *workflow.Instance
@@ -555,7 +582,7 @@ func (sb *sqliteBackend) GetWorkflowTask(ctx context.Context, queues []workflow.
 	var metadata *metadata.WorkflowMetadata
 	if metadataJson.Valid {
 		if err := json.Unmarshal([]byte(metadataJson.String), &metadata); err != nil {
-			return nil, fmt.Errorf("parsing workflow metadata: %w", err)
+			return nil, ctxerrors.Wrap(err, "parsing workflow metadata")
 		}
 	}
 
@@ -571,7 +598,7 @@ func (sb *sqliteBackend) GetWorkflowTask(ctx context.Context, queues []workflow.
 	// Get new events
 	pendingEvents, err := getPendingEvents(ctx, tx, wfi)
 	if err != nil {
-		return nil, fmt.Errorf("getting pending events: %w", err)
+		return nil, ctxerrors.Wrap(err, "getting pending events")
 	}
 
 	// Return if there aren't any new events
@@ -586,12 +613,12 @@ func (sb *sqliteBackend) GetWorkflowTask(ctx context.Context, queues []workflow.
 	row = tx.QueryRowContext(ctx, "SELECT sequence_id FROM `history` WHERE instance_id = ? AND execution_id = ? ORDER BY rowid DESC LIMIT 1", instanceID, executionID)
 	if err := row.Scan(&t.LastSequenceID); err != nil {
 		if err != sql.ErrNoRows {
-			return nil, fmt.Errorf("getting most recent sequence id: %w", err)
+			return nil, ctxerrors.Wrap(err, "getting most recent sequence id")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute sqlite")
 	}
 
 	return t, nil
@@ -607,9 +634,9 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 ) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	instance := task.WorkflowInstance
 
@@ -630,11 +657,11 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 		instance.ExecutionID,
 		sb.workerName,
 	); err != nil {
-		return fmt.Errorf("unlocking workflow instance: %w", err)
+		return ctxerrors.Wrap(err, "unlocking workflow instance")
 	} else if n, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("checking for unlocked workflow instances: %w", err)
+		return ctxerrors.Wrap(err, "checking for unlocked workflow instances")
 	} else if n != 1 {
-		return errors.New("could not find workflow instance to unlock")
+		return ctxerrors.New("could not find workflow instance to unlock")
 	}
 
 	// Remove handled events from task
@@ -651,12 +678,12 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 			fmt.Sprintf(`DELETE FROM pending_events WHERE instance_id = ? AND execution_id = ? AND id IN (?%v)`, strings.Repeat(",?", len(executedEvents)-1)),
 			args...,
 		); err != nil {
-			return fmt.Errorf("deleting handled new events: %w", err)
+			return ctxerrors.Wrap(err, "deleting handled new events")
 		}
 	}
 
 	if err := insertEvents(ctx, tx, "history", instance, executedEvents); err != nil {
-		return fmt.Errorf("inserting history events: %w", err)
+		return ctxerrors.Wrap(err, "inserting history events")
 	}
 
 	// Schedule activities
@@ -669,20 +696,20 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 		}
 
 		if err := scheduleActivity(ctx, tx, queue, instance, e); err != nil {
-			return fmt.Errorf("scheduling activity: %w", err)
+			return ctxerrors.Wrap(err, "scheduling activity")
 		}
 	}
 
 	// Timer events
 	if err := insertPendingEvents(ctx, tx, instance, timerEvents); err != nil {
-		return fmt.Errorf("scheduling timers: %w", err)
+		return ctxerrors.Wrap(err, "scheduling timers")
 	}
 
 	for _, event := range executedEvents {
 		switch event.Type {
 		case history.EventType_TimerCanceled:
 			if err := removeFutureEvent(ctx, tx, instance, event.ScheduleEventID); err != nil {
-				return fmt.Errorf("removing future event: %w", err)
+				return ctxerrors.Wrap(err, "removing future event")
 			}
 		}
 	}
@@ -703,19 +730,19 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 
 			// Create new instance
 			if err := createInstance(ctx, tx, queue, m.WorkflowInstance, a.Metadata); err != nil {
-				if err == backend.ErrInstanceAlreadyExists {
+				if errors.Is(err, backend.ErrInstanceAlreadyExists) {
 					if err := insertPendingEvents(ctx, tx, instance, []*history.Event{
 						history.NewPendingEvent(time.Now(), history.EventType_SubWorkflowFailed, &history.SubWorkflowFailedAttributes{
 							Error: workflowerrors.FromError(backend.ErrInstanceAlreadyExists),
 						}, history.ScheduleEventID(m.WorkflowInstance.ParentEventID)),
 					}); err != nil {
-						return fmt.Errorf("inserting sub-workflow failed event: %w", err)
+						return ctxerrors.Wrap(err, "inserting sub-workflow failed event")
 					}
 
 					continue
 				}
 
-				return fmt.Errorf("creating sub-workflow instance: %w", err)
+				return ctxerrors.Wrap(err, "creating sub-workflow instance")
 			}
 		}
 
@@ -725,13 +752,13 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 			historyEvents = append(historyEvents, m.HistoryEvent)
 		}
 		if err := insertPendingEvents(ctx, tx, &targetInstance, historyEvents); err != nil {
-			return fmt.Errorf("inserting messages: %w", err)
+			return ctxerrors.Wrap(err, "inserting messages")
 		}
 	}
 
 	if sb.options.RemoveContinuedAsNewInstances && state == core.WorkflowInstanceStateContinuedAsNew {
 		if err := sb.removeWorkflowInstance(ctx, instance, tx); err != nil {
-			return fmt.Errorf("removing old instance: %w", err)
+			return ctxerrors.Wrap(err, "removing old instance")
 		}
 	}
 
@@ -741,9 +768,9 @@ func (sb *sqliteBackend) CompleteWorkflowTask(
 func (sb *sqliteBackend) ExtendWorkflowTask(ctx context.Context, task *backend.WorkflowTask) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	until := time.Now().Add(sb.options.WorkflowLockTimeout)
 	res, err := tx.ExecContext(
@@ -755,13 +782,13 @@ func (sb *sqliteBackend) ExtendWorkflowTask(ctx context.Context, task *backend.W
 		sb.workerName,
 	)
 	if err != nil {
-		return fmt.Errorf("extending workflow task lock: %w", err)
+		return ctxerrors.Wrap(err, "extending workflow task lock")
 	}
 
 	if rowsAffected, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("determining if workflow task was extended: %w", err)
+		return ctxerrors.Wrap(err, "determining if workflow task was extended")
 	} else if rowsAffected == 0 {
-		return errors.New("could not extend workflow task")
+		return ctxerrors.New("could not extend workflow task")
 	}
 
 	return tx.Commit()
@@ -770,9 +797,9 @@ func (sb *sqliteBackend) ExtendWorkflowTask(ctx context.Context, task *backend.W
 func (sb *sqliteBackend) GetActivityTask(ctx context.Context, queues []workflow.Queue) (*backend.ActivityTask, error) {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// Lock next activity
 	// (work around missing LIMIT support in sqlite driver for UPDATE statements by using sub-query)
@@ -794,11 +821,12 @@ func (sb *sqliteBackend) GetActivityTask(ctx context.Context, queues []workflow.
 			SET locked_until = ?, worker = ?
 			WHERE rowid = (
 				SELECT rowid FROM activities WHERE (locked_until IS NULL OR locked_until < ?) AND queue IN (?%s) LIMIT 1
-			) RETURNING id, instance_id, execution_id, event_type, timestamp, schedule_event_id, visible_at`, strings.Repeat(",?", len(queues)-1)),
+			) RETURNING id, instance_id, execution_id, event_type, timestamp, schedule_event_id, visible_at, queue`, strings.Repeat(",?", len(queues)-1)),
 		args...,
 	)
 
 	var instanceID, executionID string
+	var activityQueue workflow.Queue
 	event := &history.Event{}
 
 	if err := row.Scan(
@@ -809,48 +837,50 @@ func (sb *sqliteBackend) GetActivityTask(ctx context.Context, queues []workflow.
 		&event.Timestamp,
 		&event.ScheduleEventID,
 		&event.VisibleAt,
+		&activityQueue,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			// No rows locked, just return
 			return nil, nil
 		}
 
-		return nil, fmt.Errorf("scanning event: %w", err)
+		return nil, ctxerrors.Wrap(err, "scanning event")
 	}
 
 	var attributes []byte
 	if err := tx.QueryRowContext(
 		ctx, "SELECT data FROM attributes WHERE instance_id = ? AND execution_id = ? AND id = ?", instanceID, executionID, event.ID,
 	).Scan(&attributes); err != nil {
-		return nil, fmt.Errorf("scanning attributes: %w", err)
+		return nil, ctxerrors.Wrap(err, "scanning attributes")
 	}
 
 	a, err := history.DeserializeAttributes(event.Type, attributes)
 	if err != nil {
-		return nil, fmt.Errorf("deserializing attributes: %w", err)
+		return nil, ctxerrors.Wrap(err, "deserializing attributes")
 	}
 
 	event.Attributes = a
 
 	var metadataJson sql.NullString
 	if err := tx.QueryRowContext(ctx, "SELECT metadata FROM instances WHERE id = ?", instanceID).Scan(&metadataJson); err != nil {
-		return nil, fmt.Errorf("scanning metadata: %w", err)
+		return nil, ctxerrors.Wrap(err, "scanning metadata")
 	}
 
 	var metadata *workflow.Metadata
 	if err := json.Unmarshal([]byte(metadataJson.String), &metadata); err != nil {
-		return nil, fmt.Errorf("unmarshaling metadata: %w", err)
+		return nil, ctxerrors.Wrap(err, "unmarshaling metadata")
 	}
 
 	t := &backend.ActivityTask{
 		ID:               event.ID,
 		ActivityID:       event.ID,
+		Queue:            activityQueue,
 		WorkflowInstance: core.NewWorkflowInstance(instanceID, executionID),
 		Event:            event,
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, ctxerrors.Wrap(err, "execute sqlite")
 	}
 
 	return t, nil
@@ -859,9 +889,9 @@ func (sb *sqliteBackend) GetActivityTask(ctx context.Context, queues []workflow.
 func (sb *sqliteBackend) CompleteActivityTask(ctx context.Context, task *backend.ActivityTask, result *history.Event) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	// Remove activity but keep the attributes, they are still needed for the history
 	if res, err := tx.ExecContext(
@@ -872,16 +902,16 @@ func (sb *sqliteBackend) CompleteActivityTask(ctx context.Context, task *backend
 		task.ActivityID,
 		sb.workerName,
 	); err != nil {
-		return fmt.Errorf("unlocking instance: %w", err)
+		return ctxerrors.Wrap(err, "unlocking instance")
 	} else if n, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("checking for deleted activities: %w", err)
+		return ctxerrors.Wrap(err, "checking for deleted activities")
 	} else if n != 1 {
-		return errors.New("could not find activity to delete")
+		return ctxerrors.New("could not find activity to delete")
 	}
 
 	// Insert new event generated during this workflow execution
 	if err := insertPendingEvents(ctx, tx, task.WorkflowInstance, []*history.Event{result}); err != nil {
-		return fmt.Errorf("inserting new events for completed activity: %w", err)
+		return ctxerrors.Wrap(err, "inserting new events for completed activity")
 	}
 
 	return tx.Commit()
@@ -890,9 +920,9 @@ func (sb *sqliteBackend) CompleteActivityTask(ctx context.Context, task *backend
 func (sb *sqliteBackend) ExtendActivityTask(ctx context.Context, task *backend.ActivityTask) error {
 	tx, err := sb.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return ctxerrors.Wrap(err, "execute sqlite")
 	}
-	defer tx.Rollback()
+	defer cleanup.Rollback(ctx, tx)
 
 	until := time.Now().Add(sb.options.ActivityLockTimeout)
 	res, err := tx.ExecContext(
@@ -903,13 +933,13 @@ func (sb *sqliteBackend) ExtendActivityTask(ctx context.Context, task *backend.A
 		sb.workerName,
 	)
 	if err != nil {
-		return fmt.Errorf("extending activity lock: %w", err)
+		return ctxerrors.Wrap(err, "extending activity lock")
 	}
 
 	if rowsAffected, err := res.RowsAffected(); err != nil {
-		return fmt.Errorf("determining if activity was extended: %w", err)
+		return ctxerrors.Wrap(err, "determining if activity was extended")
 	} else if rowsAffected == 0 {
-		return errors.New("could not extend activity")
+		return ctxerrors.New("could not extend activity")
 	}
 
 	return tx.Commit()

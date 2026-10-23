@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/psyb0t/ctxerrors"
+
+	"github.com/psyb0t/go-workflows/backend/history"
+	"github.com/psyb0t/go-workflows/core"
 )
 
 func insertPendingEvents(ctx context.Context, tx *sql.Tx, instance *core.WorkflowInstance, newEvents []*history.Event) error {
@@ -42,11 +44,13 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			return "," + strings.Join(holders, ", ")
 		}
 
+		// #nosec G202 -- Only numbered placeholders are generated; values remain bound parameters.
 		aquery := "INSERT INTO attributes (event_id, instance_id, execution_id, data) VALUES ($1, $2, $3, $4)" +
 			pgPlaceHolder(5, len(batchEvents)-1, 4) +
 			" ON CONFLICT DO NOTHING"
 		aargs := make([]interface{}, 0, len(batchEvents)*4)
 
+		// #nosec G202 -- tableName comes only from the two fixed-table callers above.
 		query := "INSERT INTO " + tableName +
 			" (event_id, sequence_id, instance_id, execution_id, event_type, timestamp, schedule_event_id, visible_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)" +
 			pgPlaceHolder(9, len(batchEvents)-1, 8)
@@ -56,7 +60,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 		for _, newEvent := range batchEvents {
 			a, err := history.SerializeAttributes(newEvent.Attributes)
 			if err != nil {
-				return err
+				return ctxerrors.Wrap(err, "execute events")
 			}
 
 			aargs = append(aargs, newEvent.ID, instance.InstanceID, instance.ExecutionID, a)
@@ -71,7 +75,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			aquery,
 			aargs...,
 		); err != nil {
-			return fmt.Errorf("inserting attributes: %w", err)
+			return ctxerrors.Wrap(err, "inserting attributes")
 		}
 
 		_, err := tx.ExecContext(
@@ -80,7 +84,7 @@ func insertEvents(ctx context.Context, tx *sql.Tx, tableName string, instance *c
 			args...,
 		)
 		if err != nil {
-			return fmt.Errorf("inserting events: %w", err)
+			return ctxerrors.Wrap(err, "inserting events")
 		}
 	}
 
@@ -97,7 +101,7 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 		  AND pe.schedule_event_id = $3
 		  AND pe.visible_at IS NOT NULL`,
 		instance.InstanceID, instance.ExecutionID, scheduleEventID); err != nil {
-		return fmt.Errorf("removing attributes for future events: %w", err)
+		return ctxerrors.Wrap(err, "removing attributes for future events")
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -107,7 +111,7 @@ func removeFutureEvent(ctx context.Context, tx *sql.Tx, instance *core.WorkflowI
 		  AND schedule_event_id = $3
 		  AND visible_at IS NOT NULL`,
 		instance.InstanceID, instance.ExecutionID, scheduleEventID); err != nil {
-		return fmt.Errorf("removing pending future events: %w", err)
+		return ctxerrors.Wrap(err, "removing pending future events")
 	}
 
 	return nil

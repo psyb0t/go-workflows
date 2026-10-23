@@ -2,17 +2,19 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/psyb0t/ctxerrors"
+
 	"github.com/google/uuid"
+
+	"github.com/psyb0t/go-workflows/backend"
+	"github.com/psyb0t/go-workflows/client"
+	"github.com/psyb0t/go-workflows/samples"
+	"github.com/psyb0t/go-workflows/worker"
+	"github.com/psyb0t/go-workflows/workflow"
 )
 
 func main() {
@@ -49,8 +51,12 @@ func startWorkflow(ctx context.Context, c *client.Client) {
 func RunWorker(ctx context.Context, mb backend.Backend) {
 	w := worker.New(mb, nil)
 
-	w.RegisterWorkflow(Workflow1)
-	w.RegisterWorkflow(SubWorkflow1)
+	if err := w.RegisterWorkflow(Workflow1); err != nil {
+		panic(err)
+	}
+	if err := w.RegisterWorkflow(SubWorkflow1); err != nil {
+		panic(err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		panic("could not start worker")
@@ -67,12 +73,12 @@ func Workflow1(ctx workflow.Context, msg string, subID string) (string, error) {
 	}, SubWorkflow1)
 
 	if _, err := workflow.SignalWorkflow(ctx, subID, "sub-signal", 42).Get(ctx); err != nil {
-		return "", fmt.Errorf("could not signal sub-workflow: %w", err)
+		return "", ctxerrors.Wrap(err, "could not signal sub-workflow")
 	}
 
 	r, err := fsw.Get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("could not get sub-workflow result: %w", err)
+		return "", ctxerrors.Wrap(err, "could not get sub-workflow result")
 	}
 
 	return r, nil
