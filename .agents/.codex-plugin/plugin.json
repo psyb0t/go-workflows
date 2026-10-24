@@ -1,6 +1,6 @@
 {
   "name": "go-workflows",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Build durable Go workflows with shared storage, workers, activities, retries, signals and timers.",
   "author": {"name": "psyb0t", "url": "https://github.com/psyb0t"},
   "homepage": "https://github.com/psyb0t/go-workflows",

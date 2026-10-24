@@ -8,7 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/jellydator/ttlcache/v3 v3.0.0
 	github.com/moby/moby/api v1.55.0
-	github.com/psyb0t/common-go v0.9.1
+	github.com/psyb0t/common-go v0.10.0
 	github.com/psyb0t/ctxerrors v0.9.0
 	github.com/psyb0t/ctxscope v1.0.3
 	github.com/redis/go-redis/v9 v9.19.0
@@ -202,7 +202,7 @@ require (
 	github.com/maratori/testableexamples v1.0.1 // indirect
 	github.com/maratori/testpackage v1.1.2 // indirect
 	github.com/matoous/godox v1.1.0 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect

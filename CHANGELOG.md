@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.1
+
+- Fix the SQLite, MySQL and PostgreSQL backends logging an ERROR record every time a worker polled and found no work. Update common-go to v0.10.0, whose GORM logger writes a lookup that finds no record as a DEBUG query. Only the log level changes: queries still return `gorm.ErrRecordNotFound`.
+- Log GORM records with the caller's ctxscope attributes.
+- Keep the local `.telemetry/` directory out of the Docker build context.
+
+No configuration or API migration is needed.
+
 ## v1.3.0
 
 - Fix workflow tasks that failed when the executor cache expired or evicted their executor mid-task. The cache closed the executor from its eviction goroutine while the task was still replaying or executing, which raced with the running workflow and failed the replay with "previous workflow execution scheduled an activity which could not be found". An executor closed during a task now stops its workflow after that task finishes, and a task that finds its cached executor already closed runs in a new executor.

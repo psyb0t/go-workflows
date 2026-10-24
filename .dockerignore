@@ -42,3 +42,4 @@ htmlcov
 .vscode
 .envrc
 .editorconfig
+.telemetry/
