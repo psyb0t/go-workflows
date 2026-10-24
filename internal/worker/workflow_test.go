@@ -8,6 +8,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/google/uuid"
+	"github.com/psyb0t/ctxerrors/commerr"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 
@@ -115,4 +116,25 @@ func TestWorkflowTaskWorkerReplacesClosedCachedExecutor(t *testing.T) {
 	require.NotSame(t, closed, cache.stored[1])
 
 	cache.stored[1].Close()
+}
+
+func TestWorkflowTaskWorkerRejectsTaskWithoutEvents(t *testing.T) {
+	t.Parallel()
+
+	taskWorker := &WorkflowTaskWorker{
+		backend:  &mocks.MockBackend{},
+		registry: registry.New(),
+		cache:    &closedExecutorCache{},
+		logger:   slog.Default(),
+	}
+
+	task := &backend.WorkflowTask{
+		ID:               uuid.NewString(),
+		WorkflowInstance: core.NewWorkflowInstance(uuid.NewString(), uuid.NewString()),
+		Metadata:         &metadata.WorkflowMetadata{},
+	}
+
+	result, err := taskWorker.Execute(t.Context(), task)
+	require.ErrorIs(t, err, commerr.ErrInvalidState)
+	require.Nil(t, result)
 }

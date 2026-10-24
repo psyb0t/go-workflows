@@ -57,6 +57,9 @@ func (s *Store) GetWorkflowTask(ctx context.Context, queues []core.Queue) (*back
 		if err != nil {
 			return err
 		}
+		if len(events) == 0 {
+			return errNoPendingEvents
+		}
 		var workflowMetadata *metadata.WorkflowMetadata
 		if len(row.Metadata) != 0 {
 			if err := json.Unmarshal(row.Metadata, &workflowMetadata); err != nil {
@@ -77,6 +80,9 @@ func (s *Store) GetWorkflowTask(ctx context.Context, queues []core.Queue) (*back
 		}
 		return nil
 	})
+	if errors.Is(err, errNoPendingEvents) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, ctxerrors.Wrap(err, "get workflow task")
 	}

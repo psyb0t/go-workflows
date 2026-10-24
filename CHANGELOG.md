@@ -3,6 +3,7 @@
 ## v1.3.0
 
 - Fix workflow tasks that failed when the executor cache expired or evicted their executor mid-task. The cache closed the executor from its eviction goroutine while the task was still replaying or executing, which raced with the running workflow and failed the replay with "previous workflow execution scheduled an activity which could not be found". An executor closed during a task now stops its workflow after that task finishes, and a task that finds its cached executor already closed runs in a new executor.
+- Fix a worker panic on a workflow task with no new events. The SQLite, MySQL and PostgreSQL backends now release a claim whose instance has no visible pending events instead of returning an empty task, and the worker rejects an empty task with `commerr.ErrInvalidState`.
 - Add `executor.ErrExecutorClosed`, returned by `ExecuteTask` on a closed executor. `ExecuteTask` also refuses a second concurrent task on the same executor with `commerr.ErrInvalidState`.
 
 No configuration or API migration is needed.

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/psyb0t/ctxerrors"
+	"github.com/psyb0t/ctxerrors/commerr"
 
 	"github.com/benbjohnson/clock"
 
@@ -108,6 +109,10 @@ func (wtw *WorkflowTaskWorker) Complete(ctx context.Context, result *executor.Ex
 }
 
 func (wtw *WorkflowTaskWorker) Execute(ctx context.Context, t *backend.WorkflowTask) (*executor.ExecutionResult, error) {
+	if len(t.NewEvents) == 0 {
+		return nil, ctxerrors.Wrapf(commerr.ErrInvalidState, "workflow task %s has no new events", t.ID)
+	}
+
 	// Record how long this task was in the queue
 	firstEvent := t.NewEvents[0]
 	var scheduledAt time.Time
