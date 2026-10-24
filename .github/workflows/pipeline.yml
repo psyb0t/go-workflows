@@ -68,3 +68,15 @@ jobs:
     permissions:
       contents: write
     uses: psyb0t/reusable-github-workflows/.github/workflows/release-workflow.yml@master
+
+  publish-to-clawhub:
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
+    with:
+      skill_names: '["go-workflows"]'
+      plugin_names: '[]'
+    secrets:
+      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}

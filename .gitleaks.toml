@@ -20,3 +20,11 @@ condition = "AND"
 paths = ['''(^|/)vendor/modernc\.org/sqlite/lib/sqlite_windows_(amd64|arm64)\.go$''']
 regexTarget = "match"
 regexes = ['''^BCRYPT_DSA_KEY_BLOB_V2 = _BCRYPT_DSA_KEY_BLOB_V2$''']
+
+[[allowlists]]
+description = "SQLite generated Windows SDK type names and blob-format constants"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)vendor/modernc\.org/sqlite/lib/sqlite_g_0000000000060000\.go$''']
+regexTarget = "line"
+regexes = ['''(?m)^(const BCRYPT_AES_WRAP_KEY_BLOB = "Rfc3565KeyWrapBlob"|const NCRYPT_PKCS8_PRIVATE_KEY_BLOB = "PKCS8_PRIVATEKEY"|type (BCRYPT_DSA_KEY_BLOB_V2|DHPRIVKEY_VER3|PBCRYPT_DSA_KEY_BLOB_V2|T_BCRYPT_DSA_KEY_BLOB_V2|T_PRIVKEYVER3|_BCRYPT_DSA_KEY_BLOB_V2) = [A-Za-z0-9_]+)$''']

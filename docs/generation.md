@@ -1,4 +1,4 @@
-# Generated mocks
+# Code generation
 
 Mockery is pinned in the root `go.mod` tool block and included in `vendor`. Generators run in the development image through `make generate`, which invokes `go generate ./...`.
 
@@ -34,3 +34,19 @@ Mocks are for unit boundaries. Backend contracts and process recovery tests stil
 The shared code workflow runs `make generate` after build, lint, tests and security checks. It fails when the working tree has modified, deleted or untracked files. This catches stale output, hand-edits and newly generated files that were never committed. `git diff` alone would miss new untracked output.
 
 A clean checkout must remain clean after generation. Check `git status --porcelain --untracked-files=all` locally. Ignoring a generated file is not a way to satisfy this gate.
+
+## Database repositories
+
+`cmd/repogen` generates the SQLite, MySQL and PostgreSQL repository packages with the pinned GORM Gen version. Each backend keeps database code in `backend/<dialect>/db/`:
+
+| Directory | Owns |
+| --- | --- |
+| `models/` | Plain structs matching the SQL columns |
+| `migrations/` | Embedded, versioned SQL |
+| `repositories/` | Generated typed accessors and a package-local `gen.go` |
+
+The directive runs `go tool repogen -dialect=<dialect> -out=.` from its own repository package. `make generate` runs all three directives along with Mockery. Generated queries are bound with `repositories.Use(database)` for each backend, without a global default connection.
+
+Use generated accessors for filtering, ordering, counts, inserts, updates and deletes. GORM clauses handle upserts and activity row locks. Custom interfaces under `cmd/repogen/` define joined event reads, cursor pagination and correlated workflow-readiness queries. Runtime values stay bound parameters.
+
+To change database access, update the plain model or custom query interface, regenerate, and run the affected backend tests. A schema change also needs a new SQL migration with matching UP and DOWN files. Never edit a published migration or generated repository by hand. No constructor calls `AutoMigrate`.

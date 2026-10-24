@@ -13,7 +13,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/psyb0t/go-workflows/backend"
-	"github.com/psyb0t/go-workflows/backend/history"
 	"github.com/psyb0t/go-workflows/backend/test"
 	"github.com/psyb0t/go-workflows/tests/testinfra"
 )
@@ -112,68 +111,6 @@ func TestPostgresBackendE2E(t *testing.T) {
 var _ test.TestBackend = (*postgresBackend)(nil)
 
 // GetFutureEvents returns all pending events that have a non-null visible_at (timers / scheduled future events).
-func (pb *postgresBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, error) {
-	tx, err := pb.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup.Rollback(ctx, tx)
-
-	// attributes now lives in the separate attributes table (joined by event_id + instance_id + execution_id)
-	rows, err := tx.QueryContext(ctx,
-		`SELECT 
-            pe.event_id,
-            pe.sequence_id,
-            pe.event_type,
-            pe.timestamp,
-            pe.schedule_event_id,
-            a.data,
-            pe.visible_at
-         FROM pending_events pe
-         JOIN attributes a 
-           ON a.event_id = pe.event_id 
-          AND a.instance_id = pe.instance_id 
-          AND a.execution_id = pe.execution_id
-         WHERE pe.visible_at IS NOT NULL`)
-	if err != nil {
-		return nil, fmt.Errorf("querying future events: %w", err)
-	}
-	defer cleanup.Close(context.Background(), rows)
-
-	var future []*history.Event
-	for rows.Next() {
-		var raw []byte
-		e := &history.Event{}
-		if err := rows.Scan(
-			&e.ID,
-			&e.SequenceID,
-			&e.Type,
-			&e.Timestamp,
-			&e.ScheduleEventID,
-			&raw,
-			&e.VisibleAt,
-		); err != nil {
-			return nil, fmt.Errorf("scanning future event: %w", err)
-		}
-
-		attr, err := history.DeserializeAttributes(e.Type, raw)
-		if err != nil {
-			return nil, fmt.Errorf("deserializing attributes: %w", err)
-		}
-		e.Attributes = attr
-
-		future = append(future, e)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-
-	return future, nil
-}
 
 func Test_PostgresBackend_WorkerName(t *testing.T) {
 	if testing.Short() {

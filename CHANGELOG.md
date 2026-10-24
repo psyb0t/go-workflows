@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2.0
+
+- Add a go-workflows usage skill, Claude Code and Codex plugin manifests, and release-gated ClawHub publishing.
+- Use GORM Gen repositories for SQLite, MySQL and PostgreSQL storage, with package-local models and common-go connection and migration helpers.
+- Preserve existing SQL schemas, migration ledgers and caller-owned connections. Keep worker claims and workflow checkpoints transactional.
+- Update common-go to v0.9.1 so PostgreSQL migration connections return to the application pool.
+- Count runnable workflows once per instance and keep diagnostic pagination stable across tied timestamps and execution IDs.
+- Test legacy SQL rows, migration retries, connection ownership, history batches and retention across reused execution IDs.
+- Check coroutine exit through its own deferred cleanup instead of process-wide goroutine counts.
+- Explain clients, queues, claims and worker recovery in the README.
+
+Existing databases retain their schema and migration ledger. The GORM storage transition requires no schema conversion or SQL DOWN migration.
+
 ## v1.1.0
 
 - Add complete commented client/worker examples, explain the feature samples and check README examples against runnable source.

@@ -9,7 +9,7 @@ Start with [the runnable SQLite example](../samples/quickstart/main.go).
 | Storage, migrations, ownership and retention | [Backends and operations](backends.md) |
 | HTTP UI/API, authentication boundary and telemetry | [Diagnostics](diagnostics.md) |
 | Container toolchains, Make commands and dependencies | [Development](development.md) |
-| Mockery configuration and generation drift | [Generated mocks](generation.md) |
+| Mockery, database repositories and generation drift | [Code generation](generation.md) |
 | Race tests, real backends, recovery and coverage | [Testing](testing.md) |
 | Tags, compatibility, CI and repository automation | [Module releases](releases.md) |
 

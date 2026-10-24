@@ -3,9 +3,9 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/psyb0t/go-workflows/backend/test"
@@ -16,8 +16,9 @@ func TestSQLStorageFailures(t *testing.T) {
 	t.Parallel()
 	factory := func(t *testing.T) (diag.Backend, *sql.DB) {
 		t.Helper()
-		db, err := sql.Open("sqlite", "file:"+uuid.NewString()+"?mode=memory&cache=shared")
+		db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "workflows.db")+"?_txlock=immediate")
 		require.NoError(t, err)
+		db.SetMaxOpenConns(1)
 		require.NoError(t, db.PingContext(context.Background()))
 
 		t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -28,4 +29,5 @@ func TestSQLStorageFailures(t *testing.T) {
 	test.SQLCorruptionTest(t, factory, true)
 	test.SQLMutationTest(t, factory)
 	test.SQLTableFaultTest(t, factory)
+	test.SQLRepositoryTest(t, factory, "sqlite")
 }

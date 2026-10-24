@@ -1,0 +1,8 @@
+{
+  "name": "go-workflows",
+  "description": "Build durable Go workflows with shared storage, workers, activities, retries, signals and timers.",
+  "author": {"name": "psyb0t", "url": "https://github.com/psyb0t"},
+  "homepage": "https://github.com/psyb0t/go-workflows",
+  "license": "MIT",
+  "keywords": ["go", "golang", "workflows", "durable-execution"]
+}

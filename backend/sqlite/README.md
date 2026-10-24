@@ -12,4 +12,6 @@ SQLite embeds workflow persistence in one application host. File-backed workers 
 
 Embedded migrations live in `db/migrations`, with paired `.up.sql` and `.down.sql` files. Follow the existing sequence and preserve published migrations. Back up a consistent database before applying schema changes; copying a live main file alone can omit data still in its WAL.
 
+The common-go SQLite GORM adapter wraps the production modernc driver. The common-go migration runner uses the same caller-owned pool and existing ledger. `db/models` mirrors the SQL schema, while `db/repositories` contains generated typed accessors. File-backed constructors use immediate transactions to serialize claims before selecting work. A supplied pool must provide equivalent writer serialization. See [generation](../../docs/generation.md#database-repositories).
+
 Run `make test-sqlite` for backend contracts and `make test-recovery` for file-backed worker recovery. See [backend operations](../../docs/backends.md) and [testing](../../docs/testing.md).

@@ -2,7 +2,6 @@ package sync
 
 import (
 	"errors"
-	"runtime"
 	"testing"
 	"time"
 
@@ -110,7 +109,9 @@ func Test_Coroutine_ContinueAndBlock(t *testing.T) {
 }
 
 func Test_Coroutine_Exit_Before_Yield(t *testing.T) {
+	started := false
 	c := NewCoroutine(Background(), func(ctx Context) error {
+		started = true
 		s := getCoState(ctx)
 
 		s.Yield()
@@ -120,15 +121,16 @@ func Test_Coroutine_Exit_Before_Yield(t *testing.T) {
 		return nil
 	})
 
-	r := runtime.NumGoroutine()
 	c.Exit()
 
 	require.True(t, c.Finished())
-	require.Equal(t, r-1, runtime.NumGoroutine())
+	require.False(t, started)
 }
 
 func Test_Coroutine_Exit(t *testing.T) {
+	cleanup := make(chan struct{})
 	c := NewCoroutine(Background(), func(ctx Context) error {
+		defer close(cleanup)
 		s := getCoState(ctx)
 
 		s.Yield()
@@ -140,15 +142,20 @@ func Test_Coroutine_Exit(t *testing.T) {
 
 	c.Execute()
 
-	r := runtime.NumGoroutine()
 	c.Exit()
 
 	require.True(t, c.Finished())
-	require.Equal(t, r-1, runtime.NumGoroutine())
+	select {
+	case <-cleanup:
+	default:
+		t.Fatal("coroutine exited without running deferred cleanup")
+	}
 }
 
 func Test_Coroutine_Exit_with_defer(t *testing.T) {
+	cleanup := make(chan struct{})
 	c := NewCoroutine(Background(), func(ctx Context) error {
+		defer close(cleanup)
 		s := getCoState(ctx)
 
 		defer func() {
@@ -164,12 +171,15 @@ func Test_Coroutine_Exit_with_defer(t *testing.T) {
 
 	c.Execute()
 
-	r := runtime.NumGoroutine()
 	c.Exit()
 
 	require.True(t, c.Finished())
 	require.NoError(t, c.Error())
-	require.Equal(t, r-1, runtime.NumGoroutine())
+	select {
+	case <-cleanup:
+	default:
+		t.Fatal("coroutine exited without running deferred cleanup")
+	}
 }
 
 func Test_Coroutine_ExitIfAlreadyFinished(t *testing.T) {

@@ -46,4 +46,6 @@ Storage failure tests close real connections, make individual SQL tables unavail
 
 SQL lease tests reject unknown workflow and activity identities, retry failed activity completion without losing its task, and reject duplicate completion. MySQL and PostgreSQL return `commerr.ErrNotFound` when an activity heartbeat matches no worker-owned row. Retention tests verify that a failed history or attribute deletion rolls back the instance deletion.
 
+SQL repository tests rerun migrations over populated databases, check migration-ledger stability and verify that a one-connection pool remains usable. Physical-schema fixtures remain readable and completable through generated repositories. Separate database handles use identical workflow identities without sharing query state. Cursor walks cover tied timestamps, partial pages and the empty end page. Batched histories retain sequence order, runnable counts count workflows rather than pending events, and retention preserves active executions whose IDs overlap deleted executions.
+
 Keep workflow definitions replay-compatible and test application workflows separately. Runtime recovery tests do not replace that responsibility.

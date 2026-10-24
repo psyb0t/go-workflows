@@ -42,7 +42,7 @@ make pkg-remove PKG=example.org/module
 
 Replace `example.org/module` with an actual module. Dependency commands operate on the root module only. External additions and upgrades must be at least seven days old. First-party `psyb0t` modules follow their upstream release line. Upgrade candidates are checked before changes are applied; direct dependencies and tool providers are both included. Lock synchronization tidies and vendors, then runs security checks.
 
-See [generated mocks](generation.md) for the Mockery configurations, imports, regeneration workflow and CI drift guard.
+See [code generation](generation.md) for Mockery configurations, typed database repositories, regeneration and the CI drift guard.
 
 ## Diagnostics UI
 

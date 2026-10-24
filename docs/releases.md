@@ -20,6 +20,8 @@ Pushes mirror Git refs to GitLab and Codeberg. Default-branch and tag pushes als
 
 Set the repository Actions secrets `GITLAB_TOKEN`, `CODEBERG_TOKEN`, `ARCHIVEORG_ACCESS_KEY` and `ARCHIVEORG_SECRET_KEY` for mirror and archive access. The build, badges, release and collaborators-only jobs use GitHub's job token.
 
+After the release job succeeds, the reusable ClawHub workflow validates and publishes only `.agents/skills/go-workflows`. It uses the `CLAWHUB_TOKEN` Actions secret and mirrors the release tag as the skill version. No OpenClaw code plugin is published. Claude Code and Codex load the passive manifests under `.agents/`; the central `psyb0t/agents` catalogs point to that directory. Release the library's agent package before publishing its catalog entry.
+
 ## Before tagging
 
 Run `make format lint build`, `make test-coverage`, `make sec` and `make generate`. Check that generation leaves no unexpected changes, read the changelog and wait for default-branch checks at the intended commit. Verify the module path before selecting a tag. Never reuse a published tag.

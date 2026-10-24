@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/psyb0t/go-workflows/backend"
-	"github.com/psyb0t/go-workflows/backend/history"
 	"github.com/psyb0t/go-workflows/backend/test"
 	"github.com/psyb0t/go-workflows/tests/testinfra"
 )
@@ -117,63 +116,6 @@ func TestMySqlBackendE2E(t *testing.T) {
 }
 
 var _ test.TestBackend = (*mysqlBackend)(nil)
-
-func (mb *mysqlBackend) GetFutureEvents(ctx context.Context) ([]*history.Event, error) {
-	tx, err := mb.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup.Rollback(ctx, tx)
-
-	// There is no index on `visible_at`, but this is okay for test only usage.
-	futureEvents, err := tx.QueryContext(
-		ctx,
-		"SELECT pe.event_id, pe.sequence_id, pe.instance_id, pe.execution_id, pe.event_type, pe.timestamp, pe.schedule_event_id, pe.visible_at, a.data FROM `pending_events` pe JOIN `attributes` a ON a.event_id = pe.event_id AND a.instance_id = pe.instance_id AND a.execution_id = pe.execution_id WHERE pe.visible_at IS NOT NULL",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("getting history: %w", err)
-	}
-
-	defer cleanup.Close(context.Background(), futureEvents)
-
-	f := make([]*history.Event, 0)
-
-	for futureEvents.Next() {
-		var instanceID, executionID string
-		var attributes []byte
-
-		fe := &history.Event{}
-
-		if err := futureEvents.Scan(
-			&fe.ID,
-			&fe.SequenceID,
-			&instanceID,
-			&executionID,
-			&fe.Type,
-			&fe.Timestamp,
-			&fe.ScheduleEventID,
-			&fe.VisibleAt,
-			&attributes,
-		); err != nil {
-			return nil, fmt.Errorf("scanning event: %w", err)
-		}
-
-		a, err := history.DeserializeAttributes(fe.Type, attributes)
-		if err != nil {
-			return nil, fmt.Errorf("deserializing attributes: %w", err)
-		}
-
-		fe.Attributes = a
-
-		f = append(f, fe)
-	}
-
-	if futureEvents.Err() != nil {
-		return nil, futureEvents.Err()
-	}
-
-	return f, nil
-}
 
 func Test_MysqlBackend_WorkerName(t *testing.T) {
 	if testing.Short() {

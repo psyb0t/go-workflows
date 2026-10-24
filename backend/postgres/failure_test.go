@@ -41,4 +41,5 @@ func TestSQLStorageFailures(t *testing.T) {
 	test.SQLCorruptionTest(t, factory, false)
 	test.SQLMutationTest(t, factory)
 	test.SQLTableFaultTest(t, factory)
+	test.SQLRepositoryTest(t, factory, "postgres")
 }

@@ -14,6 +14,12 @@ Use each backend's constructor and options. The [quick start](../samples/quickst
 
 SQL backends embed production migrations. Constructors can apply migrations; constructors accepting existing database connections have distinct ownership and migration defaults. Read their Go documentation before supplying a shared connection. Close workers before storage. A backend created with a caller-owned database does not own that connection.
 
+SQLite, MySQL and PostgreSQL each have a `db` subpackage containing plain models, embedded SQL migrations and GORM Gen repositories. SQL migrations own the schema. Each backend binds generated queries to its own connection and worker. See [generation](generation.md#database-repositories) for changes to models and queries.
+
+The common-go migration runners use the existing `schema_migrations` ledger. Updating the library does not rebuild tables or reset histories. SQLite and PostgreSQL migrate through their existing pool. MySQL migrations use a separate multi-statement connection, leaving runtime connections unchanged. Existing migration files keep their names and sequence numbers.
+
+The GORM repository transition adds no schema migration. Rolling back that library change means restoring the previous application binary against the same database, not running SQL DOWN migrations. Historical DOWN scripts can remove tables or columns and are not a data-preserving application rollback.
+
 Use isolated databases or schemas for applications with separate retention, access and upgrade requirements. Back up storage before schema or library upgrades and test restoration with compatible workers. Diagnostics are not a backup.
 
 ## Locks and durability

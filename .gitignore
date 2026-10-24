@@ -17,6 +17,7 @@ docs/build/
 # Local agent state and generated artifacts
 AGENTS.md
 CLAUDE.md
+.claude
 CODEX.local.md
 .research_files/
 .cache/

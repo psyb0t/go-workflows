@@ -14,4 +14,6 @@ Constructors can panic when initialization or automatic migration fails. Keep cr
 
 Embedded migrations live in `db/migrations`, with paired `.up.sql` and `.down.sql` files. Follow the existing sequence and preserve published migrations. Test schema changes against real PostgreSQL using the production constructor and migration path.
 
+The common-go PostgreSQL wrapper opens owned connections and runs the embedded migrations. `db/models` mirrors the existing schema, and `db/repositories` contains generated typed accessors. Read-committed transactions keep row claims and checkpoints atomic; skip-locked selection lets replicas claim different work. See [generation](../../docs/generation.md#database-repositories).
+
 Run `make test-postgres` for backend contracts and `make test-recovery` for independent worker process recovery. Both use isolated PostgreSQL with `-race`; neither needs a production database. See [testing](../../docs/testing.md).

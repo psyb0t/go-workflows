@@ -14,4 +14,6 @@ Constructors can panic when initialization or automatic migration fails. Apply m
 
 Embedded migrations live in `db/migrations`, with paired `.up.sql` and `.down.sql` files. Follow the existing sequence, preserve published migrations and test schema changes against real MySQL. The constructor and `Migrate` method use this embedded source.
 
+`db/models` mirrors those tables; `db/repositories` contains GORM Gen output. The common-go MySQL wrapper opens owned connections and supplies a separate multi-statement migration pool. Runtime claims use read-committed transactions and skip locked rows. MySQL reports changed rows by default, so heartbeat updates verify ownership separately when a second-precision timestamp has not changed. See [generation](../../docs/generation.md#database-repositories).
+
 Run `make test-mysql` from the repository root. It creates its own isolated MySQL service and runs the backend contracts with `-race`; it does not use a production database. See [testing](../../docs/testing.md).

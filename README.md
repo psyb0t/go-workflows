@@ -11,14 +11,30 @@ Durable workflows in Go. Run activities, wait for signals and timers, and resume
 
 The engine runs inside your application. Pick SQLite, PostgreSQL, MySQL or Redis for persistence. A monoprocess backend is also available for local work.
 
+## TL;DR
+
+Think of a shared to-do list that also remembers how far each job has got. Two workers connected to the same database can share ten queued jobs without talking to each other.
+
+- The **client** submits a job. The **backend** saves it in your chosen storage. A **queue** is a label, such as `emails`, that tells workers which jobs to pick up.
+- **Workers** are copies of your application running the registered Go functions. They ask storage for available work. Storage assigns a task in one protected operation, recording the worker's name and an expiry time. Other workers take different available tasks; jobs do not have to alternate between workers.
+- A **workflow** is the recipe: do this step, wait for that result, then continue. **Activities** do the actual work, such as calling an API or writing a file. Their results go into the job's history.
+- A claim is temporary. The worker sends **heartbeats** to keep it alive. If the worker crashes, its claim eventually expires and another worker can take over. With persistent storage, that worker rebuilds progress from history and reuses recorded activity results.
+- Jobs can wait for a timer or an outside message called a **signal**, and retry failed activities according to your settings. The client can wait for the result or leave the job running.
+
+There is one catch: an activity can finish an external action and crash before saving its result. Another worker may repeat it. Make repeated calls safe, for example by using an operation ID to avoid charging the same order twice.
+
+No separate workflow server or message broker is required. Clients and workers can live in one program or separate processes sharing storage. The optional diagnostics UI reads their progress; it does not coordinate execution. See [architecture and workers](docs/architecture.md) for the details.
+
 ## Contents
 
+- [TL;DR](#tldr)
 - [Try it](#try-it)
 - [Use it in an application](#use-it-in-an-application)
 - [Execution rules](#execution-rules)
 - [What is included](#what-is-included)
 - [Documentation](#documentation)
 - [Development](#development)
+- [Agent integrations](#agent-integrations)
 - [License and origin](#license-and-origin)
 
 ## Try it
@@ -254,7 +270,7 @@ Keep inputs and results serializable. Retain compatible workflow definitions whi
 | [Backends and operations](docs/backends.md) | Storage, connection ownership, migrations and retention |
 | [Diagnostics](docs/diagnostics.md) | UI mounting, HTTP API, access control, metrics and tracing |
 | [Development](docs/development.md) | Make commands, tools and dependencies |
-| [Generated mocks](docs/generation.md) | Mockery sources, output, imports and CI drift checks |
+| [Code generation](docs/generation.md) | Mockery, typed database repositories and CI drift checks |
 | [Releases](docs/releases.md) | Module tags and the default-branch release gate |
 | [Testing](docs/testing.md) | Independent workers, crash recovery and backend contracts |
 | [Samples](samples/README.md) | Feature map, executable examples and demo storage cautions |
@@ -272,6 +288,28 @@ make generate
 `make test` runs the complete race-enabled suite, including isolated real PostgreSQL, MySQL and Redis services. `make test-unit` excludes external services. Missing Docker is an error in the full suite, not a skipped integration test.
 
 See [testing](docs/testing.md) for independent-process recovery scenarios, coverage scope and focused commands.
+
+## Agent integrations
+
+The [go-workflows skill](.agents/skills/go-workflows/SKILL.md) teaches agents how to connect clients and workers, choose storage, route queues, use activities, retries, signals and timers, and test durable execution. Installing it adds instructions, not a running workflow service.
+
+From the psyb0t marketplace:
+
+```bash
+claude plugin marketplace add psyb0t/agents
+claude plugin install go-workflows@psyb0t
+
+codex plugin marketplace add psyb0t/agents
+codex plugin add go-workflows@psyb0t
+```
+
+OpenClaw installs the skill from ClawHub:
+
+```bash
+openclaw skills install @psyb0t/go-workflows
+```
+
+Publication follows a tagged release after default-branch checks pass. For a local checkout before publication, Codex discovers `.agents/skills/` directly; Claude Code can load it with `claude --plugin-dir ./.agents`. This package contains no hooks, automatic installers or MCP server.
 
 ## License and origin
 
