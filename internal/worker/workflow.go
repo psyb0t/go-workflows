@@ -129,12 +129,30 @@ func (wtw *WorkflowTaskWorker) Execute(ctx context.Context, t *backend.WorkflowT
 		metrickeys.EventName: eventName,
 	})
 
-	executor, err := wtw.getExecutor(ctx, t)
+	taskExecutor, err := wtw.getExecutor(ctx, t)
 	if err != nil {
 		return nil, ctxerrors.Wrap(err, "getting executor")
 	}
 
-	result, err := executor.ExecuteTask(ctx, t)
+	result, err := taskExecutor.ExecuteTask(ctx, t)
+	if errors.Is(err, executor.ErrExecutorClosed) {
+		// The cache closed the executor between lookup and task start. A new
+		// executor replays the history and runs the task.
+		wtw.logger.DebugContext(ctx, "cached workflow executor was closed, using a new one",
+			log.InstanceIDKey, t.WorkflowInstance.InstanceID,
+			log.ExecutionIDKey, t.WorkflowInstance.ExecutionID,
+		)
+
+		taskExecutor, err = wtw.newExecutor(t)
+		if err != nil {
+			return nil, ctxerrors.Wrap(err, "creating workflow task executor")
+		}
+
+		wtw.storeExecutor(ctx, t, taskExecutor)
+
+		result, err = taskExecutor.ExecuteTask(ctx, t)
+	}
+
 	if err != nil {
 		return nil, ctxerrors.Wrap(err, "executing task")
 	}
@@ -174,30 +192,43 @@ func (wtw *WorkflowTaskWorker) getExecutor(ctx context.Context, t *backend.Workf
 	}
 
 	if !ok {
-		e, err = executor.NewExecutor(
-			wtw.logger.With(
-				slog.String(log.InstanceIDKey, t.WorkflowInstance.InstanceID),
-				slog.String(log.ExecutionIDKey, t.WorkflowInstance.ExecutionID),
-			),
-			wtw.backend.Tracer(),
-			wtw.registry,
-			wtw.backend.Options().Converter,
-			wtw.backend.Options().ContextPropagators,
-			wtw.backend,
-			t.WorkflowInstance,
-			t.Metadata,
-			clock.New(),
-			wtw.backend.Options().MaxHistorySize,
-		)
+		e, err = wtw.newExecutor(t)
 		if err != nil {
 			return nil, ctxerrors.Wrap(err, "creating workflow task executor")
 		}
 	}
 
 	// Cache executor instance for future continuation tasks, or refresh last access time
-	if err := wtw.cache.Store(ctx, t.WorkflowInstance, e); err != nil {
-		wtw.logger.ErrorContext(ctx, "error while caching workflow task executor:", "error", err)
+	wtw.storeExecutor(ctx, t, e)
+
+	return e, nil
+}
+
+func (wtw *WorkflowTaskWorker) newExecutor(t *backend.WorkflowTask) (executor.WorkflowExecutor, error) {
+	e, err := executor.NewExecutor(
+		wtw.logger.With(
+			slog.String(log.InstanceIDKey, t.WorkflowInstance.InstanceID),
+			slog.String(log.ExecutionIDKey, t.WorkflowInstance.ExecutionID),
+		),
+		wtw.backend.Tracer(),
+		wtw.registry,
+		wtw.backend.Options().Converter,
+		wtw.backend.Options().ContextPropagators,
+		wtw.backend,
+		t.WorkflowInstance,
+		t.Metadata,
+		clock.New(),
+		wtw.backend.Options().MaxHistorySize,
+	)
+	if err != nil {
+		return nil, ctxerrors.Wrap(err, "new workflow executor")
 	}
 
 	return e, nil
+}
+
+func (wtw *WorkflowTaskWorker) storeExecutor(ctx context.Context, t *backend.WorkflowTask, e executor.WorkflowExecutor) {
+	if err := wtw.cache.Store(ctx, t.WorkflowInstance, e); err != nil {
+		wtw.logger.ErrorContext(ctx, "error while caching workflow task executor:", "error", err)
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"reflect"
 	"slices"
+	stdsync "sync"
 	"testing"
 	"time"
 
@@ -79,6 +80,13 @@ type executor struct {
 	workflowSpan trace.Span
 
 	maxHistorySize int64
+
+	// lifecycleMu guards executing and closed. A cache can close the
+	// executor from another goroutine while a task runs; the close then
+	// waits for that task to finish.
+	lifecycleMu stdsync.Mutex
+	executing   bool
+	closed      bool
 }
 
 func NewExecutor(
@@ -127,7 +135,47 @@ func NewExecutor(
 	}, nil
 }
 
+// ExecuteTask runs one workflow task. It returns ErrExecutorClosed when the
+// executor was closed before the task started, and ErrInvalidState when
+// another task is already running on it.
 func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*ExecutionResult, error) {
+	if err := e.beginTask(); err != nil {
+		return nil, err
+	}
+	defer e.endTask()
+
+	return e.executeTask(ctx, t)
+}
+
+func (e *executor) beginTask() error {
+	e.lifecycleMu.Lock()
+	defer e.lifecycleMu.Unlock()
+
+	if e.closed {
+		return ctxerrors.Wrap(ErrExecutorClosed, "begin workflow task")
+	}
+
+	if e.executing {
+		return ctxerrors.Wrap(commerr.ErrInvalidState, "workflow task is already running on this executor")
+	}
+
+	e.executing = true
+
+	return nil
+}
+
+func (e *executor) endTask() {
+	e.lifecycleMu.Lock()
+	e.executing = false
+	closed := e.closed
+	e.lifecycleMu.Unlock()
+
+	if closed {
+		e.stopWorkflow()
+	}
+}
+
+func (e *executor) executeTask(ctx context.Context, t *backend.WorkflowTask) (*ExecutionResult, error) {
 	logger := e.logger.With(
 		log.TaskIDKey, t.ID,
 	)
@@ -332,7 +380,29 @@ func (e *executor) executeNewEvents(newEvents []*history.Event) ([]*history.Even
 	return newEvents, nil
 }
 
+// Close stops the executor's workflow. It is safe to call from another
+// goroutine and more than once. When a task is running, Close returns at once
+// and the task stops the workflow after it finishes.
 func (e *executor) Close() {
+	e.lifecycleMu.Lock()
+	if e.closed {
+		e.lifecycleMu.Unlock()
+
+		return
+	}
+
+	e.closed = true
+	executing := e.executing
+	e.lifecycleMu.Unlock()
+
+	if executing {
+		return
+	}
+
+	e.stopWorkflow()
+}
+
+func (e *executor) stopWorkflow() {
 	if e.workflow != nil {
 		e.logger.Debug("Stopping workflow executor")
 

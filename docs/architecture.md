@@ -42,7 +42,7 @@ Every eligible worker must have the definitions it can receive. Queues select co
 
 ## Concurrency and shutdown
 
-`WorkflowPollers` and `ActivityPollers` control task polling. `MaxParallelWorkflowTasks` and `MaxParallelActivityTasks` control concurrent execution; zero means unlimited. Executor cache size and TTL affect workflow replay overhead, not durable history retention.
+`WorkflowPollers` and `ActivityPollers` control task polling. `MaxParallelWorkflowTasks` and `MaxParallelActivityTasks` control concurrent execution; zero means unlimited. Executor cache size and TTL affect workflow replay overhead, not durable history retention. An executor that expires or is evicted while a workflow task runs on it stays usable until that task finishes, and the next task for the instance replays its history in a new executor.
 
 Keep heartbeat intervals comfortably below the corresponding backend lock timeout. A stalled process can lose its lease while its external operation continues, so cancellation and idempotency must also be handled by the activity.
 

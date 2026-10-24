@@ -9,6 +9,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/google/uuid"
+	"github.com/psyb0t/ctxerrors/commerr"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/goleak"
@@ -869,4 +870,113 @@ func pendingCommands(commands []command.Command) []command.Command {
 		}
 	}
 	return pending
+}
+
+// blockingHistoryProvider holds a task inside its history fetch until the
+// test releases it.
+type blockingHistoryProvider struct {
+	history []*history.Event
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *blockingHistoryProvider) GetWorkflowInstanceHistory(
+	ctx context.Context,
+	instance *core.WorkflowInstance,
+	lastSequenceID *int64,
+) ([]*history.Event, error) {
+	close(p.started)
+	<-p.release
+
+	return p.history, nil
+}
+
+type taskOutcome struct {
+	result *ExecutionResult
+	err    error
+}
+
+// Not parallel: goleak checks every goroutine in the process.
+func Test_Executor_CloseDuringTaskStopsWorkflowAfterTask(t *testing.T) {
+	r := registry.New()
+	workflowWithActivity := func(ctx sync.Context) error {
+		_, err := wf.ExecuteActivity[int](ctx, wf.DefaultActivityOptions, activity1, 42).Get(ctx)
+
+		return err
+	}
+	require.NoError(t, r.RegisterWorkflow(workflowWithActivity))
+	require.NoError(t, r.RegisterActivity(activity1))
+
+	instance := core.NewWorkflowInstance(uuid.NewString(), "executionID")
+	startedEvent := history.NewHistoryEvent(
+		1,
+		time.Now(),
+		history.EventType_WorkflowExecutionStarted,
+		&history.ExecutionStartedAttributes{
+			Name:   fn.Name(workflowWithActivity),
+			Inputs: []payload.Payload{},
+		},
+	)
+	startedEvent.SequenceID = 1
+
+	provider := &blockingHistoryProvider{
+		history: []*history.Event{startedEvent},
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+
+	e, err := newExecutor(r, instance, provider)
+	require.NoError(t, err)
+
+	ignoreExisting := goleak.IgnoreCurrent()
+
+	// The task is behind the stored history, so it fetches it and blocks.
+	task := continueTask(instance.InstanceID, nil, 1)
+	outcome := make(chan taskOutcome, 1)
+	go func() {
+		result, err := e.ExecuteTask(t.Context(), task)
+		outcome <- taskOutcome{result: result, err: err}
+	}()
+
+	<-provider.started
+
+	_, err = e.ExecuteTask(t.Context(), task)
+	require.ErrorIs(t, err, commerr.ErrInvalidState)
+
+	e.Close()
+	close(provider.release)
+
+	finished := <-outcome
+	require.NoError(t, finished.err)
+	require.Equal(t, core.WorkflowInstanceStateActive, finished.result.State)
+	require.Len(t, finished.result.ActivityEvents, 1)
+
+	// The task stopped the workflow when it finished.
+	goleak.VerifyNone(t, ignoreExisting)
+
+	_, err = e.ExecuteTask(t.Context(), task)
+	require.ErrorIs(t, err, ErrExecutorClosed)
+
+	e.Close()
+}
+
+func Test_Executor_CloseBeforeTaskRejectsTask(t *testing.T) {
+	t.Parallel()
+
+	r := registry.New()
+	workflowDone := func(ctx sync.Context) error {
+		return nil
+	}
+	require.NoError(t, r.RegisterWorkflow(workflowDone))
+
+	instance := core.NewWorkflowInstance(uuid.NewString(), "executionID")
+	e, err := newExecutor(r, instance, &testHistoryProvider{})
+	require.NoError(t, err)
+
+	e.Close()
+	e.Close()
+
+	_, err = e.ExecuteTask(t.Context(),
+		startWorkflowTask(instance.InstanceID, workflowDone))
+	require.ErrorIs(t, err, ErrExecutorClosed)
 }
