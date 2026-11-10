@@ -1,35 +1,41 @@
 name: pipeline
 
+# A Go library: no image, no binaries. Every branch push runs the build, lint,
+# tests with the coverage gate, the security scan and the codegen drift check,
+# all through the Makefile in the repo's dev image. Default-branch runs then
+# refresh the badges. A v* tag does not rerun the checks: it validates the tag,
+# waits for that commit's default-branch run to succeed, cuts the GitHub
+# release from the annotated tag message, refreshes the badges with that run's
+# coverage and publishes the agent skill to ClawHub.
 on:
   push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+  # Refreshes the imported-by badge. The whole pipeline runs, not a badges-only
+  # job: the badge publisher republishes only what the run produced, so a
+  # badges-only refresh would drop the coverage, version and license badges.
   schedule:
-    - cron: '43 7 * * 3'
+    - cron: "43 7 * * 3"
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   code:
-    if: "!startsWith(github.ref, 'refs/tags/') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+    if: "!startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: read
-      security-events: write
+      security-events: write # for the sec SARIF upload
     uses: psyb0t/reusable-github-workflows/.github/workflows/code-workflow.yml@master
     with:
-      build_command: make build
-      lint_command: make lint
-      test_command: make test-coverage
-      sec_command: make sec
-      generate_command: make generate
-      coverage_file: coverage-percent.txt
-      sarif_file: sec.sarif
-      sarif_category: go
+      build_command: "make build"
+      lint_command: "make lint"
+      test_command: "make test-coverage"
+      sec_command: "make sec"
+      generate_command: "make generate"
+      coverage_file: "coverage-percent.txt"
+      sarif_file: "sec.sarif"
+      sarif_category: "go"
 
+  # SemVer and the Go major-version module path, before anything waits.
   validate-tag:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -50,24 +56,26 @@ jobs:
       actions: read
     uses: psyb0t/reusable-github-workflows/.github/workflows/wait-for-default-branch.yml@master
 
-  badges:
-    needs: [code, wait]
-    if: "always() && ((github.ref_name == github.event.repository.default_branch && needs.code.result == 'success') || (startsWith(github.ref, 'refs/tags/v') && needs.wait.result == 'success'))"
-    permissions:
-      contents: write
-      actions: read
-    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
-    with:
-      coverage: true
-      importers: true
-      coverage_run_id: ${{ needs.wait.outputs.run_id }}
-
   release:
     needs: [wait]
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     uses: psyb0t/reusable-github-workflows/.github/workflows/release-workflow.yml@master
+
+  # Tag runs read the coverage artifact from the default-branch run they
+  # release.
+  badges:
+    needs: [code, wait]
+    if: "always() && ((github.ref_name == github.event.repository.default_branch && needs.code.result == 'success') || (startsWith(github.ref, 'refs/tags/') && needs.wait.result == 'success'))"
+    permissions:
+      contents: write
+      actions: read # cross-run coverage artifact download on tags
+    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
+    with:
+      coverage: true
+      coverage_run_id: ${{ needs.wait.outputs.run_id }}
+      importers: true
 
   publish-to-clawhub:
     needs: [release]
@@ -77,6 +85,6 @@ jobs:
     uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
     with:
       skill_names: '["go-workflows"]'
-      plugin_names: '[]'
+      plugin_names: "[]"
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}

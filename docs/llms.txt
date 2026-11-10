@@ -1,0 +1,21 @@
+---
+layout: null
+permalink: /llms.txt
+sitemap: false
+---
+# go-workflows
+
+> Durable workflows in Go. Run activities, wait for signals and timers, and resume from persisted history on SQLite, PostgreSQL, MySQL or Redis. The engine is a library inside your application.
+
+## Docs
+
+{% assign pages = site.pages | where_exp: "item", "item.description" | where_exp: "item", "item.nav_exclude != true" | sort: "nav_order" -%}
+{% for item in pages -%}
+- [{{ item.title }}]({{ item.url | absolute_url }}): {{ item.description }}
+{% endfor -%}
+
+## Code
+
+- [Source repository](https://github.com/psyb0t/go-workflows)
+- [Go Reference](https://pkg.go.dev/github.com/psyb0t/go-workflows)
+- [Samples](https://github.com/psyb0t/go-workflows/blob/main/samples/README.md)

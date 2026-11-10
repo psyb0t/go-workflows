@@ -1,0 +1,56 @@
+title: go-workflows
+tagline: Durable workflows inside your Go application
+description: Durable Go workflows that run activities, wait for signals and timers, and resume from persisted history on SQLite, PostgreSQL, MySQL or Redis.
+lang: en
+url: https://psyb0t.github.io
+baseurl: /go-workflows
+repository: psyb0t/go-workflows
+author: psyb0t
+
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+color_scheme: mocha
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-relative-links
+  - jekyll-include-cache
+
+permalink: pretty
+
+relative_links:
+  enabled: true
+  collections: false
+
+exclude:
+  - source/
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+      seo:
+        type: TechArticle
+
+search:
+  heading_level: 3
+
+aux_links:
+  GitHub:
+    - https://github.com/psyb0t/go-workflows
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: Go Reference
+    url: https://pkg.go.dev/github.com/psyb0t/go-workflows
+  - title: Changelog
+    url: https://github.com/psyb0t/go-workflows/blob/main/CHANGELOG.md
+
+gh_edit_link: true
+gh_edit_link_text: Edit this page on GitHub
+gh_edit_repository: https://github.com/psyb0t/go-workflows
+gh_edit_branch: main
+gh_edit_source: docs
+gh_edit_view_mode: tree

@@ -1,3 +1,9 @@
+---
+title: "Workflow guide"
+description: "Writing replay-safe go-workflows code: determinism, activities, retries, errors, subworkflows, signals, timers, logging and tests."
+nav_order: 3
+---
+
 # Workflow guide
 
 ## Execution and replay
@@ -26,9 +32,9 @@ Retries stop for cancellation or permanent failures. Configure maximum attempts 
 
 `workflow.CreateSubWorkflowInstance[T]` starts a child and returns its future. Register children on workers as well as parents. Use a stable instance ID when another process must address an instance.
 
-`client.SignalWorkflow` sends a serializable payload. A workflow receives it through `workflow.NewSignalChannel[T]`. Signals are stored before delivery; design payloads as versioned application contracts. See [signal](../samples/signal/) and [signal-subworkflow](../samples/signal-subworkflow/).
+`client.SignalWorkflow` sends a serializable payload. A workflow receives it through `workflow.NewSignalChannel[T]`. Signals are stored before delivery; design payloads as versioned application contracts. See [signal](https://github.com/psyb0t/go-workflows/tree/main/samples/signal) and [signal-subworkflow](https://github.com/psyb0t/go-workflows/tree/main/samples/signal-subworkflow).
 
-`workflow.ScheduleTimer` records a durable wakeup and returns a future. `workflow.Sleep` is its convenience form. Timer cancellation is cooperative through workflow contexts. See [timer](../samples/timer/) and [cancellation](../samples/cancellation/).
+`workflow.ScheduleTimer` records a durable wakeup and returns a future. `workflow.Sleep` is its convenience form. Timer cancellation is cooperative through workflow contexts. See [timer](https://github.com/psyb0t/go-workflows/tree/main/samples/timer) and [cancellation](https://github.com/psyb0t/go-workflows/tree/main/samples/cancellation).
 
 When waiting on a workflow channel, select between the channel and `ctx.Done()` if cancellation must interrupt the wait. A plain receive does not automatically observe cancellation.
 
@@ -42,4 +48,4 @@ Metadata and history are persisted data. Do not put credentials, access tokens o
 
 ## Tests
 
-Use `tester.NewWorkflowTester[T]` for deterministic tests with activity expectations and virtual time. It does not replace backend integration tests. `activitytester` tests activities in a prepared activity context. [Samples](../samples/) include tests for retries, timers, subworkflows and converters.
+Use `tester.NewWorkflowTester[T]` for deterministic tests with activity expectations and virtual time. It does not replace backend integration tests. [`activitytester`](https://github.com/psyb0t/go-workflows/tree/main/activitytester) tests activities in a prepared activity context. [Samples](https://github.com/psyb0t/go-workflows/tree/main/samples) include tests for retries, timers, subworkflows and converters.

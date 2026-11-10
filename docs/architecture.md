@@ -1,3 +1,9 @@
+---
+title: "Architecture and workers"
+description: "How clients, backends and workers share storage, claim tasks, route queues, identify replicas and shut down in go-workflows."
+nav_order: 2
+---
+
 # Architecture and workers
 
 The workflow engine is a Go library inside your application, not a separate orchestration server. Applications share work by connecting to the same storage namespace. They do not register with a central application process or communicate through a worker-to-worker API.
@@ -36,7 +42,7 @@ Workflow instance IDs address durable work. Execution IDs distinguish runs, incl
 
 `worker.New` runs both workflow and activity workers. `worker.NewWorkflowWorker` and `worker.NewActivityWorker` split those roles between processes. Each process connects independently to the same backend namespace.
 
-Set `WorkflowQueues` and `ActivityQueues` in the corresponding worker options. A new instance selects its queue through `client.WorkflowInstanceOptions.Queue`. `workflow.ActivityOptions.Queue` can route an activity elsewhere; by default it inherits the workflow's queue. The [queues sample](../samples/queues/) shows separate routing. System queues are included by the worker implementation.
+Set `WorkflowQueues` and `ActivityQueues` in the corresponding worker options. A new instance selects its queue through `client.WorkflowInstanceOptions.Queue`. `workflow.ActivityOptions.Queue` can route an activity elsewhere; by default it inherits the workflow's queue. The [queues sample](https://github.com/psyb0t/go-workflows/tree/main/samples/queues) shows separate routing. System queues are included by the worker implementation.
 
 Every eligible worker must have the definitions it can receive. Queues select consumers; they do not enforce authorization. Isolate storage and credentials when applications must not see or execute each other's work.
 

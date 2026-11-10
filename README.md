@@ -23,7 +23,7 @@ Think of a shared to-do list that also remembers how far each job has got. Two w
 
 There is one catch: an activity can finish an external action and crash before saving its result. Another worker may repeat it. Make repeated calls safe, for example by using an operation ID to avoid charging the same order twice.
 
-No separate workflow server or message broker is required. Clients and workers can live in one program or separate processes sharing storage. The optional diagnostics UI reads their progress; it does not coordinate execution. See [architecture and workers](docs/architecture.md) for the details.
+No separate workflow server or message broker is required. Clients and workers can live in one program or separate processes sharing storage. The optional diagnostics UI reads their progress; it does not coordinate execution. See [architecture and workers](https://psyb0t.github.io/go-workflows/architecture/) for the details.
 
 ## Contents
 
@@ -35,6 +35,7 @@ No separate workflow server or message broker is required. Clients and workers c
 - [Documentation](#documentation)
 - [Development](#development)
 - [Agent integrations](#agent-integrations)
+- [Sponsor](#sponsor)
 - [License and origin](#license-and-origin)
 
 ## Try it
@@ -242,7 +243,7 @@ func add(_ context.Context, left, right int) (int, error) {
 }
 ```
 
-`Start` already launches the worker's goroutines. You do not need `go worker()` around it. To split an application into a producer and worker service, keep registration and `Start` in the worker process and `CreateWorkflowInstance` in the producer. Both must use the same backend and queues. In-memory SQLite only connects objects in one process. See [split workers](samples/simple-split-worker/) and [architecture](docs/architecture.md) for shared storage, replicas and task ownership.
+`Start` already launches the worker's goroutines. You do not need `go worker()` around it. To split an application into a producer and worker service, keep registration and `Start` in the worker process and `CreateWorkflowInstance` in the producer. Both must use the same backend and queues. In-memory SQLite only connects objects in one process. See [split workers](samples/simple-split-worker/) and [architecture](https://psyb0t.github.io/go-workflows/architecture/) for shared storage, replicas and task ownership.
 
 ## Execution rules
 
@@ -250,7 +251,7 @@ Workflow code replays. Use the `workflow` package for time, timers, concurrency,
 
 Activities have at-least-once execution semantics. A worker can finish an external action and fail before recording its result. Make activities idempotent or deduplicate using a durable operation key. This library does not promise exactly-once external side effects.
 
-Keep inputs and results serializable. Retain compatible workflow definitions while their instances are active. See [the workflow guide](docs/guide.md) for retries, cancellation and upgrades.
+Keep inputs and results serializable. Retain compatible workflow definitions while their instances are active. See [the workflow guide](https://psyb0t.github.io/go-workflows/guide/) for retries, cancellation and upgrades.
 
 ## What is included
 
@@ -263,16 +264,19 @@ Keep inputs and results serializable. Retain compatible workflow definitions whi
 
 ## Documentation
 
+The full documentation is at [https://psyb0t.github.io/go-workflows/](https://psyb0t.github.io/go-workflows/).
+
 | Read | For |
 | --- | --- |
-| [Architecture and workers](docs/architecture.md) | Clients, backends, replicas, identities, queues and shutdown |
-| [Workflow guide](docs/guide.md) | Determinism, retries, signals, cancellation and logging |
-| [Backends and operations](docs/backends.md) | Storage, connection ownership, migrations and retention |
-| [Diagnostics](docs/diagnostics.md) | UI mounting, HTTP API, access control, metrics and tracing |
-| [Development](docs/development.md) | Make commands, tools and dependencies |
-| [Code generation](docs/generation.md) | Mockery, typed database repositories and CI drift checks |
-| [Releases](docs/releases.md) | Module tags and the default-branch release gate |
-| [Testing](docs/testing.md) | Independent workers, crash recovery and backend contracts |
+| [Architecture and workers](https://psyb0t.github.io/go-workflows/architecture/) | Clients, backends, replicas, identities, queues and shutdown |
+| [Workflow guide](https://psyb0t.github.io/go-workflows/guide/) | Determinism, retries, signals, cancellation and logging |
+| [Backends and operations](https://psyb0t.github.io/go-workflows/backends/) | Storage, connection ownership, migrations and retention |
+| [Diagnostics](https://psyb0t.github.io/go-workflows/diagnostics/) | UI mounting, HTTP API, access control, metrics and tracing |
+| [Agent integrations](https://psyb0t.github.io/go-workflows/agent-integrations/) | Installing the usage skill for Claude Code, Codex and OpenClaw |
+| [Development](https://psyb0t.github.io/go-workflows/development/) | Make commands, tools and dependencies |
+| [Code generation](https://psyb0t.github.io/go-workflows/generation/) | Mockery, typed database repositories and CI drift checks |
+| [Releases](https://psyb0t.github.io/go-workflows/releases/) | Module tags and the default-branch release gate |
+| [Testing](https://psyb0t.github.io/go-workflows/testing/) | Independent workers, crash recovery and backend contracts |
 | [Samples](samples/README.md) | Feature map, executable examples and demo storage cautions |
 
 ## Development
@@ -287,29 +291,15 @@ make generate
 
 `make test` runs the complete race-enabled suite, including isolated real PostgreSQL, MySQL and Redis services. `make test-unit` excludes external services. Missing Docker is an error in the full suite, not a skipped integration test.
 
-See [testing](docs/testing.md) for independent-process recovery scenarios, coverage scope and focused commands.
+See [testing](https://psyb0t.github.io/go-workflows/testing/) for independent-process recovery scenarios, coverage scope and focused commands.
 
 ## Agent integrations
 
-The [go-workflows skill](.agents/skills/go-workflows/SKILL.md) teaches agents how to connect clients and workers, choose storage, route queues, use activities, retries, signals and timers, and test durable execution. Installing it adds instructions, not a running workflow service.
+The [go-workflows skill](.agents/skills/go-workflows/SKILL.md) teaches agents how to connect clients and workers, choose storage, route queues, use activities, retries, signals and timers, and test durable execution. It installs from the psyb0t marketplace in Claude Code and Codex, and from ClawHub in OpenClaw. Installing it adds instructions, not a running workflow service. See [agent integrations](https://psyb0t.github.io/go-workflows/agent-integrations/) for the commands.
 
-From the psyb0t marketplace:
+## Sponsor
 
-```bash
-claude plugin marketplace add psyb0t/agents
-claude plugin install go-workflows@psyb0t
-
-codex plugin marketplace add psyb0t/agents
-codex plugin add go-workflows@psyb0t
-```
-
-OpenClaw installs the skill from ClawHub:
-
-```bash
-openclaw skills install @psyb0t/go-workflows
-```
-
-Publication follows a tagged release after default-branch checks pass. For a local checkout before publication, Codex discovers `.agents/skills/` directly; Claude Code can load it with `claude --plugin-dir ./.agents`. This package contains no hooks, automatic installers or MCP server.
+<a href="https://www.buymeacoffee.com/psyb0t"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me a Coffee" height="60" width="217"></a>
 
 ## License and origin
 

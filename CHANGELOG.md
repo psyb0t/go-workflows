@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.2
+
+- Publish the documentation at [psyb0t.github.io/go-workflows](https://psyb0t.github.io/go-workflows/), built from `docs/`, with a new agent integrations page. The README links to the site and keeps the examples.
+- Run the pipeline on every branch push instead of only `main` and pull requests. Pull requests no longer start their own run, and a release tag still waits for its commit's `main` run instead of rerunning the checks.
+- Update `klauspost/compress` to v1.20.2, which fixes a reachable panic on two-block frames (GO-2026-6865), and `golang.org/x/net` to v0.62.0 (CVE-2026-78661).
+- Add Buy Me a Coffee to the funding links, and commit `AGENTS.md` plus the project rules in `.agents/` for coding agents.
+
+No configuration or API migration is needed.
+
 ## v1.3.1
 
 - Fix the SQLite, MySQL and PostgreSQL backends logging an ERROR record every time a worker polled and found no work. Update common-go to v0.10.0, whose GORM logger writes a lookup that finds no record as a DEBUG query. Only the log level changes: queries still return `gorm.ErrRecordNotFound`.

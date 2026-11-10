@@ -1,8 +1,14 @@
+---
+title: "Testing"
+description: "The race-enabled test suite: real PostgreSQL, MySQL and Redis containers, crash recovery between worker processes and the 90% coverage gate."
+nav_order: 9
+---
+
 # Testing
 
 All Go test targets run in the development image with `-race`, an explicit timeout and caching disabled. `make test` runs unit tests, backend contracts and process recovery tests. `make test-coverage` runs the same packages with atomic coverage and fails below 90%. CI calls that coverage target. A stricter `MIN_TEST_COVERAGE` is allowed, but values below 90 are rejected.
 
-The command prints function coverage, retains the detailed `coverage.out` profile and writes `coverage-percent.txt` for CI badges. The gate counts distinct instrumented statement blocks, including function literals in package-level initializer tables. Go's function summary only counts named function declarations, so its total can differ. Generated `*.gen.go`, directive-only `gen.go`, and the root `samples/` and `bench/` trees are excluded from reporting. Tests still run across all packages with whole-module instrumentation, so library code exercised by sample or integration tests counts. Integration helpers remain in the measured scope. `make clean` removes those reports.
+The command prints function coverage, retains the detailed `coverage.out` profile and writes `coverage-percent.txt` for CI badges. The gate counts distinct instrumented statement blocks, including function literals in package-level initializer tables. Go's function summary only counts named function declarations, so its total can differ. Generated `*.gen.go`, directive-only `gen.go`, and the root [`samples/`](https://github.com/psyb0t/go-workflows/tree/main/samples) and [`bench/`](https://github.com/psyb0t/go-workflows/tree/main/bench) trees are excluded from reporting. Tests still run across all packages with whole-module instrumentation, so library code exercised by sample or integration tests counts. Integration helpers remain in the measured scope. `make clean` removes those reports.
 
 `TEST_TIMEOUT` bounds each package. `TEST_COUNT` repeats normal and recovery suites; coverage always uses a fresh single run. Set `MIN_TEST_COVERAGE` to a value from 90 through 100 to tighten the gate. Raising the configured minimum does not establish that the current code reaches it; the measured run must pass.
 
@@ -16,11 +22,11 @@ make test
 make test-coverage
 ```
 
-The complete suite starts isolated PostgreSQL, MySQL and Redis containers through `tests/testinfra`. Missing Docker is a failure. The unit target excludes external services; file-backed SQLite scenarios still run. No production database or credentials are needed.
+The complete suite starts isolated PostgreSQL, MySQL and Redis containers through [`tests/testinfra`](https://github.com/psyb0t/go-workflows/tree/main/tests/testinfra). Missing Docker is a failure. The unit target excludes external services; file-backed SQLite scenarios still run. No production database or credentials are needed.
 
 ## Independent worker recovery
 
-`tests/integration` starts workers in separate operating-system processes. Each child receives its configuration on stdin and opens the production backend without recreating its schema. The parent applies production migrations before starting workers. Normal tests reexecute the race-instrumented test binary. Coverage builds a regular race-instrumented worker binary so it can snapshot counters before SIGKILL. The parent waits for the snapshot acknowledgement, then kills the worker. A failed snapshot fails the test. Child counters merge with the parent profile before filtering and threshold checks.
+[`tests/integration`](https://github.com/psyb0t/go-workflows/tree/main/tests/integration) starts workers in separate operating-system processes. Each child receives its configuration on stdin and opens the production backend without recreating its schema. The parent applies production migrations before starting workers. Normal tests reexecute the race-instrumented test binary. Coverage builds a regular race-instrumented worker binary so it can snapshot counters before SIGKILL. The parent waits for the snapshot acknowledgement, then kills the worker. A failed snapshot fails the test. Child counters merge with the parent profile before filtering and threshold checks.
 
 PostgreSQL and file-backed SQLite scenarios check:
 

@@ -1,6 +1,12 @@
+---
+title: "Development"
+description: "Docker-backed Make commands for building, linting and running go-workflows, plus pinned dependencies and local CPU limits."
+nav_order: 7
+---
+
 # Development
 
-The host needs Docker, Make and Git. `Dockerfile.dev` pins Go and scanner tooling; `Dockerfile.ui` pins Node and pnpm. Make runs as the host UID/GID. Go dependencies and tools share one `go.mod`, `go.sum` and `vendor` tree.
+The host needs Docker, Make and Git. [`Dockerfile.dev`](https://github.com/psyb0t/go-workflows/blob/main/Dockerfile.dev) pins Go and scanner tooling; [`Dockerfile.ui`](https://github.com/psyb0t/go-workflows/blob/main/Dockerfile.ui) pins Node and pnpm. Make runs as the host UID/GID. Go dependencies and tools share one [`go.mod`](https://github.com/psyb0t/go-workflows/blob/main/go.mod), `go.sum` and `vendor` tree.
 
 ## Commands
 
@@ -19,6 +25,7 @@ The host needs Docker, Make and Git. `Dockerfile.dev` pins Go and scanner toolin
 | `make test-mysql` | One real backend; equivalents exist for postgres, redis, sqlite and monoprocess |
 | `make sec` | Secret, filesystem and reachable Go vulnerability checks |
 | `make lint-fix` | Apply first-party formatter/linter fixes |
+| `make docs` | Build this documentation site into `.testing/docs-site` with the GitHub Pages image |
 | `make help` | Complete command index |
 
 Integration targets mount the Docker socket and use host networking to reach dynamic loopback ports. Run them on a trusted development or CI host with a Unix Docker socket. Lint, build, generation and unit targets have no socket access. Missing Docker fails integration setup.
@@ -27,7 +34,7 @@ See [testing](testing.md) for suite selection, race instrumentation, real infras
 
 ## Local resource limits
 
-Go and UI containers have no CPU quota by default. To limit local runs, copy `.env.example` to `.env` and set `DEV_CPUS` to a positive Docker CPU quota such as `2.5`. An exported `DEV_CPUS` or a Make command-line assignment also works; command-line assignments override `.env`. With `CI=true`, Make ignores `.env` and CPU quotas, so GitHub Actions can use all CPUs available on its runner. Memory and PID limits remain unchanged.
+Go and UI containers have no CPU quota by default. To limit local runs, copy [`.env.example`](https://github.com/psyb0t/go-workflows/blob/main/.env.example) to `.env` and set `DEV_CPUS` to a positive Docker CPU quota such as `2.5`. An exported `DEV_CPUS` or a Make command-line assignment also works; command-line assignments override `.env`. With `CI=true`, Make ignores `.env` and CPU quotas, so GitHub Actions can use all CPUs available on its runner. Memory and PID limits remain unchanged.
 
 ## Dependencies
 
@@ -50,4 +57,4 @@ The React UI uses Vite and pnpm. `make ui-lock` updates its lockfile with a seve
 
 ## Security reports
 
-`make sec` writes `sec.sarif` and fails on secrets, high/critical filesystem findings and reachable Go vulnerabilities. Reviewed exceptions in `.trivyignore.yaml` are scoped to exact lockfiles and advisories. They do not exempt the host Docker daemon from updates. Vulnerability checks include tooling dependencies. Secret scanning includes vendored source, with a narrow exception for a generated SQLite Windows type alias; minified browser bundles are excluded while their source is scanned separately.
+`make sec` writes `sec.sarif` and fails on secrets, high/critical filesystem findings and reachable Go vulnerabilities. Reviewed exceptions in [`.trivyignore.yaml`](https://github.com/psyb0t/go-workflows/blob/main/.trivyignore.yaml) are scoped to exact lockfiles and advisories. They do not exempt the host Docker daemon from updates. Vulnerability checks include tooling dependencies. Secret scanning includes vendored source, with a narrow exception for a generated SQLite Windows type alias; minified browser bundles are excluded while their source is scanned separately.

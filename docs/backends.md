@@ -1,3 +1,9 @@
+---
+title: "Backends and operations"
+description: "Choosing SQLite, PostgreSQL, MySQL, Redis or monoprocess storage, plus migrations, connection ownership, locks and retention."
+nav_order: 4
+---
+
 # Backends and operations
 
 | Backend | Use | Persistence |
@@ -8,7 +14,7 @@
 | Redis | Multiple worker processes | Redis persistence policy |
 | Monoprocess | Local single-process execution | Wraps another backend with in-process dispatch notifications |
 
-Use each backend's constructor and options. The [quick start](../samples/quickstart/main.go) uses `sqlite.NewSqliteBackend`. Network backends take connection settings from the application; never embed credentials in source. Worker names, polling, lock durations, sticky execution and history limits are configurable through backend and worker options.
+Use each backend's constructor and options. The [quick start](https://github.com/psyb0t/go-workflows/blob/main/samples/quickstart/main.go) uses `sqlite.NewSqliteBackend`. Network backends take connection settings from the application; never embed credentials in source. Worker names, polling, lock durations, sticky execution and history limits are configurable through backend and worker options.
 
 ## Migrations and ownership
 

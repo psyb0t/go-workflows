@@ -14,6 +14,9 @@ RUN_UID := $(shell id -u)
 RUN_GID := $(shell id -g)
 # Unit-only tool containers do not mount the Docker socket.
 DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock 2>/dev/null)
+# The image GitHub Pages builds docs/ with, so a local build matches the live site.
+DOCS_IMAGE := ghcr.io/actions/jekyll-build-pages:v1.0.13@sha256:6791ebfd912185ed59bfb5fb102664fa872496b79f87ff8b9cfba292a7345041
+DOCS_OUT := .testing/docs-site
 PKG ?= ./...
 GOFLAGS ?= -mod=vendor
 export PKG GOFLAGS RELEASE_TAG
@@ -40,7 +43,7 @@ DEV_RUN_DIND := docker run --rm --init $(DEV_ENV) $(DEV_CACHE) \
 
 .PHONY: help all dev-image shell dep pkg-lock pkg-add pkg-add-tool pkg-update pkg-upgrade pkg-remove \
 	format fmt lint lint-fix build generate ui-image ui-lock build-ui test test-unit test-integration test-coverage \
-	test-recovery test-redis test-mysql test-postgres test-sqlite test-monoprocess test-backends sec audit run run-greeting clean check-release-tag
+	test-recovery test-redis test-mysql test-postgres test-sqlite test-monoprocess test-backends sec audit docs run run-greeting clean check-release-tag
 
 help: ## List supported project commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_ -]+:.*## / {n=split($$1, names, " "); for (i=1; i<=n; i++) printf "%-24s %s\n", names[i], $$2}' $(MAKEFILE_LIST)
@@ -128,6 +131,14 @@ sec: dev-image ## Run dependency and source security checks and emit SARIF
 	$(DEV_RUN) bash scripts/sec.sh
 
 audit: sec ## Alias for source and dependency security checks
+
+docs: ## Build the documentation site into .testing/docs-site with the GitHub Pages image
+	@mkdir -p $(DOCS_OUT)
+	docker run --rm --init --user $(RUN_UID):$(RUN_GID) --cap-drop ALL \
+		--security-opt no-new-privileges:true -e HOME=/tmp \
+		-e GITHUB_WORKSPACE=/work -e GITHUB_REPOSITORY=psyb0t/$(APP_NAME) \
+		-e INPUT_SOURCE=docs -e INPUT_DESTINATION=$(DOCS_OUT) -e INPUT_VERBOSE=false \
+		-v $(PROJECT_DIR):/work -w /work $(DOCS_IMAGE)
 
 run: dev-image ## Run the persistent SQLite quick start and print result 42
 	$(DEV_RUN) go run ./samples/quickstart

@@ -1,3 +1,9 @@
+---
+title: "Releases"
+description: "How go-workflows module tags are validated and released after the default-branch pipeline passes, plus repository automation and upgrade notes."
+nav_order: 10
+---
+
 # Releases
 
 The canonical version is the Git tag. The module is `github.com/psyb0t/go-workflows`.
@@ -6,9 +12,11 @@ The first release of this module path starts at `v1.0.0`, not the upstream proje
 
 ## Pipeline
 
-Default-branch pushes run reusable Make-backed lint, build, complete coverage, security and generation checks. Non-draft pull requests run those checks too. A weekly whole-pipeline run refreshes coverage and importer badges.
+[`.github/workflows/pipeline.yml`](https://github.com/psyb0t/go-workflows/blob/main/.github/workflows/pipeline.yml) calls the shared workflows in [psyb0t/reusable-github-workflows](https://github.com/psyb0t/reusable-github-workflows). A push to any branch runs the Make-backed build, lint, complete coverage, security and generation checks. Pull requests do not start their own run. A weekly whole-pipeline run refreshes coverage and importer badges.
 
-Tags first pass `make check-release-tag`, which validates SemVer and the Go module's major-version path. They then call `wait-for-default-branch.yml` before publication. It requires a successful default-branch `pipeline` run for the tag's exact commit and returns its run ID. Tag badges reuse that coverage artifact. An invalid tag or a failed, missing or timed-out default-branch run prevents release.
+Tags do not rerun the checks. They first pass `make check-release-tag`, which validates SemVer and the Go module's major-version path. They then call `wait-for-default-branch.yml` before publication. It requires a successful default-branch `pipeline` run for the tag's exact commit and returns its run ID. Tag badges reuse that coverage artifact. An invalid tag or a failed, missing or timed-out default-branch run prevents release.
+
+The release job cuts the GitHub release from the annotated tag's message. Its first line is exactly the tag, such as `v1.3.1`, followed by a blank line and that version's CHANGELOG section, which becomes the release notes.
 
 Releases are Go source modules, not application Docker images. Dockerfiles contain development toolchains. The root module lockfiles and vendor tree belong in the release. Local databases, dependency caches, release scripts, credentials and editor state do not.
 
@@ -20,11 +28,11 @@ Pushes mirror Git refs to GitLab and Codeberg. Default-branch and tag pushes als
 
 Set the repository Actions secrets `GITLAB_TOKEN`, `CODEBERG_TOKEN`, `ARCHIVEORG_ACCESS_KEY` and `ARCHIVEORG_SECRET_KEY` for mirror and archive access. The build, badges, release and collaborators-only jobs use GitHub's job token.
 
-After the release job succeeds, the reusable ClawHub workflow validates and publishes only `.agents/skills/go-workflows`. It uses the `CLAWHUB_TOKEN` Actions secret and mirrors the release tag as the skill version. No OpenClaw code plugin is published. Claude Code and Codex load the passive manifests under `.agents/`; the central `psyb0t/agents` catalogs point to that directory. Release the library's agent package before publishing its catalog entry.
+After the release job succeeds, the reusable ClawHub workflow validates and publishes only [`.agents/skills/go-workflows`](https://github.com/psyb0t/go-workflows/tree/main/.agents/skills/go-workflows). It uses the `CLAWHUB_TOKEN` Actions secret and mirrors the release tag as the skill version. No OpenClaw code plugin is published. Claude Code and Codex load the passive manifests under `.agents/`; the central `psyb0t/agents` catalogs point to that directory. Release the library's agent package before publishing its catalog entry. See [agent integrations](agent-integrations.md) for installing it.
 
 ## Before tagging
 
-Run `make format lint build`, `make test-coverage`, `make sec` and `make generate`. Check that generation leaves no unexpected changes, read the changelog and wait for default-branch checks at the intended commit. Verify the module path before selecting a tag. Never reuse a published tag.
+Run `make format lint build`, `make test-coverage`, `make sec` and `make generate`. Check that generation leaves no unexpected changes, read the changelog and wait for default-branch checks at the intended commit. Set the version in [`.agents/.codex-plugin/plugin.json`](https://github.com/psyb0t/go-workflows/blob/main/.agents/.codex-plugin/plugin.json) to the release version. Verify the module path before selecting a tag. Never reuse a published tag.
 
 ## Migrating from v1.0.0
 

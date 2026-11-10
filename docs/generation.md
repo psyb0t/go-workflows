@@ -1,13 +1,19 @@
+---
+title: "Code generation"
+description: "How Mockery mocks and GORM Gen database repositories are generated with make generate, and how CI catches generation drift."
+nav_order: 8
+---
+
 # Code generation
 
-Mockery is pinned in the root `go.mod` tool block and included in `vendor`. Generators run in the development image through `make generate`, which invokes `go generate ./...`.
+Mockery is pinned in the root [`go.mod`](https://github.com/psyb0t/go-workflows/blob/main/go.mod) tool block and included in `vendor`. Generators run in the development image through `make generate`, which invokes `go generate ./...`.
 
 ## Sources and outputs
 
 | Interface | Configuration and directive | Generated output |
 | --- | --- | --- |
-| `backend.Backend` | `backend/mocks/config.yml`, `backend/mocks/gen.go` | `backend/mocks/backend.gen.go` |
-| `internal/worker.TaskWorker` | `internal/worker/mocks/config.yml`, `internal/worker/mocks/gen.go` | `internal/worker/mocks/task_worker.gen.go` |
+| `backend.Backend` | [`backend/mocks/config.yml`](https://github.com/psyb0t/go-workflows/blob/main/backend/mocks/config.yml), [`backend/mocks/gen.go`](https://github.com/psyb0t/go-workflows/blob/main/backend/mocks/gen.go) | [`backend/mocks/backend.gen.go`](https://github.com/psyb0t/go-workflows/blob/main/backend/mocks/backend.gen.go) |
+| `internal/worker.TaskWorker` | [`internal/worker/mocks/config.yml`](https://github.com/psyb0t/go-workflows/blob/main/internal/worker/mocks/config.yml), [`internal/worker/mocks/gen.go`](https://github.com/psyb0t/go-workflows/blob/main/internal/worker/mocks/gen.go) | [`internal/worker/mocks/task_worker.gen.go`](https://github.com/psyb0t/go-workflows/blob/main/internal/worker/mocks/task_worker.gen.go) |
 
 Each `gen.go` contains only its package clause and `//go:generate go tool mockery --config config.yml`. Configuration paths and output directories are relative to that package. Adding another generated package requires its own directive and configuration, not another Make target.
 
@@ -37,7 +43,7 @@ A clean checkout must remain clean after generation. Check `git status --porcela
 
 ## Database repositories
 
-`cmd/repogen` generates the SQLite, MySQL and PostgreSQL repository packages with the pinned GORM Gen version. Each backend keeps database code in `backend/<dialect>/db/`:
+[`cmd/repogen`](https://github.com/psyb0t/go-workflows/tree/main/cmd/repogen) generates the SQLite, MySQL and PostgreSQL repository packages with the pinned GORM Gen version. Each backend keeps database code in `backend/<dialect>/db/`:
 
 | Directory | Owns |
 | --- | --- |

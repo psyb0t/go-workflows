@@ -1,3 +1,9 @@
+---
+title: "Diagnostics"
+description: "Mounting the embedded diagnostics UI and read-only JSON API, protecting it, and wiring metrics and OpenTelemetry tracing."
+nav_order: 5
+---
+
 # Diagnostics
 
 `diag.NewServeMux(backend)` returns an HTTP mux for the embedded UI and read-only JSON API. The backend must implement `diag.Backend`. The application chooses whether to expose it and owns the HTTP server lifecycle.
@@ -6,7 +12,7 @@ The mux does not authenticate users, restrict tenants or redact stored payloads.
 
 ## Mounting
 
-Mounted directly, the UI lives at `/` and the API at `/api/`. To mount under `/diag/`, use `http.StripPrefix("/diag", diag.NewServeMux(backend))` as the handler for that prefix. See the [web sample](../samples/web/) for application wiring.
+Mounted directly, the UI lives at `/` and the API at `/api/`. To mount under `/diag/`, use `http.StripPrefix("/diag", diag.NewServeMux(backend))` as the handler for that prefix. See the [web sample](https://github.com/psyb0t/go-workflows/tree/main/samples/web) for application wiring.
 
 Set server timeouts, limit exposure and stop the HTTP server during application shutdown. More than one application can expose the same persisted data; diagnostics does not select a leader or own workflow execution.
 
@@ -33,4 +39,4 @@ History attributes may include workflow inputs, activity results and error detai
 
 `backend.WithMetrics` accepts an implementation of `backend/metrics.Client`. `backend.WithTracerProvider` accepts an OpenTelemetry tracer provider. Both default to no-op implementations. The host application configures exporters and any metrics endpoint; the diagnostics mux does not create them.
 
-Use [scope and logging](guide.md#scope-and-logging) for workflow/activity context propagation. Use [UI development](../diag/app/README.md) for the embedded React application and asset build.
+Use [scope and logging](guide.md#scope-and-logging) for workflow/activity context propagation. Use [UI development](https://github.com/psyb0t/go-workflows/blob/main/diag/app/README.md) for the embedded React application and asset build.
